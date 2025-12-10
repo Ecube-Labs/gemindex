@@ -1,0 +1,8 @@
+# Load nvm if available
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Load zsh profile for PATH (homebrew, etc.)
+[ -f "$HOME/.zshrc" ] && export PATH="/opt/homebrew/bin:$PATH"
+
+yarn lint-staged
