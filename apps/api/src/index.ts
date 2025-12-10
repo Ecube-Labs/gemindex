@@ -17,6 +17,11 @@ router.get('/api/health', (ctx) => {
   ctx.body = { status: 'ok', timestamp: new Date().toISOString() };
 });
 
+// Ping (lightweight health check)
+router.get('/ping', (ctx) => {
+  ctx.body = 'pong';
+});
+
 // Request logging middleware
 app.use(async (ctx, next) => {
   const start = Date.now();
