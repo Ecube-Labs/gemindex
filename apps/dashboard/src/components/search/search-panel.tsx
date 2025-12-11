@@ -13,8 +13,9 @@ import {
   Sparkles,
   BookmarkPlus,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -354,8 +355,8 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
     // Sort supports by startIndex
     const sortedSupports = [...supports].sort((a, b) => a.startIndex - b.startIndex);
 
-    // Build marked text by inserting markers at support boundaries
-    // Use format: ⸢idx:sources⸣ at START and ⸣idx⸢ at END to wrap the cited region
+    // Build marked text by inserting HTML markers at support boundaries
+    // Use HTML tags that will be processed by rehype-raw
     // Insert in reverse order to preserve positions
     let markedText = text;
     for (let i = sortedSupports.length - 1; i >= 0; i--) {
@@ -365,9 +366,9 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
       // Convert byte indices to character indices
       const charStartIndex = byteToCharIndex(support.startIndex);
       const charEndIndex = byteToCharIndex(support.endIndex);
-      // Format: ⸢idx:sources⸣...cited text...⸣idx⸢
-      const startMarker = `⸢${i}:${uniqueIndices.join(',')}⸣`;
-      const endMarker = `⸣${i}⸢`;
+      // Use HTML span tags with data attributes for citation markers
+      const startMarker = `<span data-cite-start="${i}" data-sources="${uniqueIndices.join(',')}"></span>`;
+      const endMarker = `<span data-cite-end="${i}"></span>`;
       markedText =
         markedText.slice(0, charStartIndex) +
         startMarker +
@@ -413,120 +414,132 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
       );
     };
 
-    // Custom component to render markers as highlighted citations with badges
-    const renderContent = (content: string): React.ReactNode[] => {
+    // Wrap content in citation highlight spans
+    // Process the rendered children to add highlighting around cited content
+    const wrapCitedContent = (
+      children: React.ReactNode,
+      renderBadge: typeof renderSourceBadge
+    ): React.ReactNode => {
+      if (!Array.isArray(children)) {
+        return children;
+      }
+
       const result: React.ReactNode[] = [];
-      // Pattern: ⸢supportIdx:source1,source2,...⸣...cited text...⸣supportIdx⸢
-      // We need to match start marker, capture content, and end marker
-      const startPattern = /⸢(\d+):([^⸣]*)⸣/g;
+      let currentCitation: { idx: string; sources: string[] } | null = null;
+      let citedContent: React.ReactNode[] = [];
 
-      let lastIndex = 0;
-      let match;
-
-      while ((match = startPattern.exec(content)) !== null) {
-        // Add text before this marker
-        if (match.index > lastIndex) {
-          result.push(content.slice(lastIndex, match.index));
-        }
-
-        // Parse the start marker
-        const supportIdxStr = match[1] ?? '0';
-        const supportIdx = parseInt(supportIdxStr, 10);
-        const sourceIndicesStr = match[2] ?? '';
-        const sourceIndices = sourceIndicesStr
-          ? sourceIndicesStr
-              .split(',')
-              .map((s) => parseInt(s, 10))
-              .filter((n) => !isNaN(n))
-          : [];
-
-        // Find the corresponding end marker
-        const endMarker = `⸣${supportIdx}⸢`;
-        const contentStartIdx = match.index + match[0].length;
-        const endMarkerIdx = content.indexOf(endMarker, contentStartIdx);
-
-        if (endMarkerIdx !== -1) {
-          // Extract the cited text between markers
-          const citedText = content.slice(contentStartIdx, endMarkerIdx);
-
-          // Render highlighted citation with badges
+      const flushCitation = () => {
+        if (currentCitation && citedContent.length > 0) {
           result.push(
             <span
-              key={`citation-${supportIdx}`}
+              key={`cite-wrap-${currentCitation.idx}`}
               className="bg-primary/10 border-b border-primary/30 rounded-sm px-0.5 -mx-0.5"
             >
-              {citedText}
-              {sourceIndices.map((sourceIndex, badgeIdx) =>
-                renderSourceBadge(sourceIndex, supportIdx, `s${supportIdx}-b${badgeIdx}`)
-              )}
+              {citedContent}
             </span>
           );
+          citedContent = [];
+        }
+        currentCitation = null;
+      };
 
-          lastIndex = endMarkerIdx + endMarker.length;
-          // Reset regex to continue from after the end marker
-          startPattern.lastIndex = lastIndex;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+
+        // Check if it's a citation marker span
+        if (child && typeof child === 'object' && 'props' in child && child.props) {
+          const childProps = child.props as Record<string, string | undefined>;
+          if (childProps['data-cite-start'] !== undefined) {
+            // Start a new citation
+            flushCitation();
+            currentCitation = {
+              idx: childProps['data-cite-start'],
+              sources: childProps['data-sources']?.split(',') ?? [],
+            };
+            continue;
+          }
+          if (childProps['data-cite-end'] !== undefined) {
+            // End current citation and add badges
+            if (currentCitation) {
+              result.push(
+                <span
+                  key={`cite-wrap-${currentCitation.idx}`}
+                  className="bg-primary/10 border-b border-primary/30 rounded-sm px-0.5 -mx-0.5"
+                >
+                  {citedContent}
+                  {currentCitation.sources.map((sourceIndexStr, badgeIdx) => {
+                    const sourceIndex = parseInt(sourceIndexStr, 10);
+                    return renderBadge(
+                      sourceIndex,
+                      parseInt(currentCitation!.idx, 10),
+                      `s${currentCitation!.idx}-b${badgeIdx}`
+                    );
+                  })}
+                </span>
+              );
+              citedContent = [];
+              currentCitation = null;
+            }
+            continue;
+          }
+        }
+
+        // Add to current citation or result
+        if (currentCitation) {
+          citedContent.push(child);
         } else {
-          // No end marker found, just render badges after start marker
-          sourceIndices.forEach((sourceIndex, badgeIdx) => {
-            result.push(renderSourceBadge(sourceIndex, supportIdx, `s${supportIdx}-b${badgeIdx}`));
-          });
-          lastIndex = match.index + match[0].length;
+          result.push(child);
         }
       }
 
-      // Add remaining text (also clean up any orphan end markers)
-      if (lastIndex < content.length) {
-        const remaining = content.slice(lastIndex).replace(/⸣\d+⸢/g, '');
-        if (remaining) {
-          result.push(remaining);
-        }
-      }
+      // Flush any remaining citation
+      flushCitation();
 
       return result;
     };
 
-    // Helper to flatten React children into a single string
-    const flattenChildren = (node: React.ReactNode): string => {
-      if (typeof node === 'string') {
-        return node;
-      }
-      if (typeof node === 'number') {
-        return String(node);
-      }
-      if (Array.isArray(node)) {
-        return node.map(flattenChildren).join('');
-      }
-      if (node && typeof node === 'object' && 'props' in node) {
-        const element = node as React.ReactElement<{ children?: React.ReactNode }>;
-        return flattenChildren(element.props.children);
-      }
-      return '';
-    };
+    // Create markdown components
+    const markdownComponents: Components = {
+      span: ({ children, ...props }) => {
+        const dataProps = props as Record<string, string | undefined>;
+        const citeStartIdx = dataProps['data-cite-start'];
+        const citeEndIdx = dataProps['data-cite-end'];
 
-    // Check if content contains any marker characters
-    const hasMarkers = (text: string): boolean => {
-      return text.includes('⸢') || text.includes('⸣');
-    };
+        // Citation markers are handled by parent wrapper, just render them for detection
+        if (citeStartIdx !== undefined || citeEndIdx !== undefined) {
+          return <span {...props}>{children}</span>;
+        }
 
-    // Recursively process React children
-    const processNode = (node: React.ReactNode): React.ReactNode => {
-      if (typeof node === 'string') {
-        if (hasMarkers(node)) {
-          return <>{renderContent(node)}</>;
-        }
-        return node;
-      }
-      if (Array.isArray(node)) {
-        // First, check if any string in the array has markers
-        // If markers might be split across nodes, flatten and process together
-        const flattened = flattenChildren(node);
-        if (hasMarkers(flattened)) {
-          return <>{renderContent(flattened)}</>;
-        }
-        // No markers, process normally
-        return node.map((child, i) => <span key={i}>{processNode(child)}</span>);
-      }
-      return node;
+        // Regular span
+        return <span {...props}>{children}</span>;
+      },
+      p: ({ children, ...props }) => (
+        <p {...props}>{wrapCitedContent(children, renderSourceBadge)}</p>
+      ),
+      li: ({ children, ...props }) => (
+        <li {...props}>{wrapCitedContent(children, renderSourceBadge)}</li>
+      ),
+      td: ({ children, ...props }) => (
+        <td {...props}>{wrapCitedContent(children, renderSourceBadge)}</td>
+      ),
+      th: ({ children, ...props }) => (
+        <th {...props}>{wrapCitedContent(children, renderSourceBadge)}</th>
+      ),
+      h1: ({ children, ...props }) => (
+        <h1 {...props}>{wrapCitedContent(children, renderSourceBadge)}</h1>
+      ),
+      h2: ({ children, ...props }) => (
+        <h2 {...props}>{wrapCitedContent(children, renderSourceBadge)}</h2>
+      ),
+      h3: ({ children, ...props }) => (
+        <h3 {...props}>{wrapCitedContent(children, renderSourceBadge)}</h3>
+      ),
+      h4: ({ children, ...props }) => (
+        <h4 {...props}>{wrapCitedContent(children, renderSourceBadge)}</h4>
+      ),
+      blockquote: ({ children, ...props }) => (
+        <blockquote {...props}>{wrapCitedContent(children, renderSourceBadge)}</blockquote>
+      ),
     };
 
     return (
@@ -534,23 +547,8 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
         <div className="prose prose-sm max-w-none dark:prose-invert">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            components={{
-              p: ({ children, ...props }) => <p {...props}>{processNode(children)}</p>,
-              li: ({ children, ...props }) => <li {...props}>{processNode(children)}</li>,
-              td: ({ children, ...props }) => <td {...props}>{processNode(children)}</td>,
-              th: ({ children, ...props }) => <th {...props}>{processNode(children)}</th>,
-              strong: ({ children, ...props }) => (
-                <strong {...props}>{processNode(children)}</strong>
-              ),
-              em: ({ children, ...props }) => <em {...props}>{processNode(children)}</em>,
-              h1: ({ children, ...props }) => <h1 {...props}>{processNode(children)}</h1>,
-              h2: ({ children, ...props }) => <h2 {...props}>{processNode(children)}</h2>,
-              h3: ({ children, ...props }) => <h3 {...props}>{processNode(children)}</h3>,
-              h4: ({ children, ...props }) => <h4 {...props}>{processNode(children)}</h4>,
-              blockquote: ({ children, ...props }) => (
-                <blockquote {...props}>{processNode(children)}</blockquote>
-              ),
-            }}
+            rehypePlugins={[rehypeRaw]}
+            components={markdownComponents}
           >
             {markedText}
           </ReactMarkdown>
