@@ -485,15 +485,45 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
       return result;
     };
 
+    // Helper to flatten React children into a single string
+    const flattenChildren = (node: React.ReactNode): string => {
+      if (typeof node === 'string') {
+        return node;
+      }
+      if (typeof node === 'number') {
+        return String(node);
+      }
+      if (Array.isArray(node)) {
+        return node.map(flattenChildren).join('');
+      }
+      if (node && typeof node === 'object' && 'props' in node) {
+        const element = node as React.ReactElement<{ children?: React.ReactNode }>;
+        return flattenChildren(element.props.children);
+      }
+      return '';
+    };
+
+    // Check if content contains any marker characters
+    const hasMarkers = (text: string): boolean => {
+      return text.includes('⸢') || text.includes('⸣');
+    };
+
     // Recursively process React children
     const processNode = (node: React.ReactNode): React.ReactNode => {
       if (typeof node === 'string') {
-        if (node.includes('⸢')) {
+        if (hasMarkers(node)) {
           return <>{renderContent(node)}</>;
         }
         return node;
       }
       if (Array.isArray(node)) {
+        // First, check if any string in the array has markers
+        // If markers might be split across nodes, flatten and process together
+        const flattened = flattenChildren(node);
+        if (hasMarkers(flattened)) {
+          return <>{renderContent(flattened)}</>;
+        }
+        // No markers, process normally
         return node.map((child, i) => <span key={i}>{processNode(child)}</span>);
       }
       return node;
