@@ -352,6 +352,70 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
       return text.length;
     };
 
+    // Adjust start index to skip markdown block-level syntax characters
+    // This prevents highlight markers from breaking markdown parsing
+    const adjustStartIndexForMarkdown = (txt: string, charIndex: number): number => {
+      // Find the start of the line containing this position
+      let lineStart = charIndex;
+      while (lineStart > 0 && txt[lineStart - 1] !== '\n') {
+        lineStart--;
+      }
+
+      const lineContent = txt.slice(lineStart);
+
+      // Markdown block-level syntax patterns at line start
+      const patterns = [
+        /^(\*|-|\+)\s+/, // Unordered list: * , - , +
+        /^\d+\.\s+/, // Ordered list: 1. , 2.
+        /^#{1,6}\s+/, // Headings: # , ## , ...
+        /^>\s*/, // Blockquote: >
+      ];
+
+      for (const pattern of patterns) {
+        const match = lineContent.match(pattern);
+        if (match) {
+          const markerEnd = lineStart + match[0].length;
+          // If charIndex is within the markdown marker, move it past the marker
+          if (charIndex >= lineStart && charIndex < markerEnd) {
+            return markerEnd;
+          }
+        }
+      }
+
+      return charIndex;
+    };
+
+    // Adjust end index to avoid ending within markdown block-level syntax
+    const adjustEndIndexForMarkdown = (txt: string, charIndex: number): number => {
+      // Find the start of the line containing this position
+      let lineStart = charIndex;
+      while (lineStart > 0 && txt[lineStart - 1] !== '\n') {
+        lineStart--;
+      }
+
+      // If at line start, no adjustment needed
+      if (charIndex === lineStart) {
+        return charIndex;
+      }
+
+      const lineContent = txt.slice(lineStart);
+
+      const patterns = [/^(\*|-|\+)\s+/, /^\d+\.\s+/, /^#{1,6}\s+/, /^>\s*/];
+
+      for (const pattern of patterns) {
+        const match = lineContent.match(pattern);
+        if (match) {
+          const markerEnd = lineStart + match[0].length;
+          // If charIndex is within the markdown marker, move it to line start (before newline)
+          if (charIndex > lineStart && charIndex <= markerEnd) {
+            return lineStart > 0 ? lineStart : 0;
+          }
+        }
+      }
+
+      return charIndex;
+    };
+
     // Sort supports by startIndex
     const sortedSupports = [...supports].sort((a, b) => a.startIndex - b.startIndex);
 
@@ -363,9 +427,17 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
       const support = sortedSupports[i];
       if (!support) continue;
       const uniqueIndices = [...new Set(support.chunkIndices)];
-      // Convert byte indices to character indices
-      const charStartIndex = byteToCharIndex(support.startIndex);
-      const charEndIndex = byteToCharIndex(support.endIndex);
+      // Convert byte indices to character indices and adjust for markdown syntax
+      const rawStartIndex = byteToCharIndex(support.startIndex);
+      const rawEndIndex = byteToCharIndex(support.endIndex);
+      const charStartIndex = adjustStartIndexForMarkdown(markedText, rawStartIndex);
+      const charEndIndex = adjustEndIndexForMarkdown(markedText, rawEndIndex);
+
+      // Skip if adjusted range is invalid
+      if (charStartIndex >= charEndIndex) {
+        continue;
+      }
+
       // Use HTML span tags with data attributes for citation markers
       const startMarker = `<span data-cite-start="${i}" data-sources="${uniqueIndices.join(',')}"></span>`;
       const endMarker = `<span data-cite-end="${i}"></span>`;
