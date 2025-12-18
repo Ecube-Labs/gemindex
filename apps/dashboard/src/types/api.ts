@@ -4,6 +4,7 @@ export interface FileSearchStore {
   name: string;
   displayName: string;
   createTime: string;
+  protected?: boolean;
 }
 
 export interface FileSearchStoreFile {

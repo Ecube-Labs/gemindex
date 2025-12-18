@@ -3,11 +3,33 @@ import * as gemini from '../lib/gemini.js';
 
 const router = new Router({ prefix: '/api/stores' });
 
+// Get list of protected store IDs from environment variable
+function getProtectedStoreIds(): string[] {
+  const protectedStores = process.env.PROTECTED_STORES;
+  if (!protectedStores) return [];
+  return protectedStores
+    .split(',')
+    .map((s) => s.trim())
+    .map((s) => s.replace(/^fileSearchStores\//, '')) // Normalize to ID only
+    .filter(Boolean);
+}
+
+// Check if a store name is protected
+function isProtectedStore(name: string): boolean {
+  const protectedIds = getProtectedStoreIds();
+  const storeId = name.replace(/^fileSearchStores\//, '');
+  return protectedIds.includes(storeId);
+}
+
 // List all stores
 router.get('/', async (ctx) => {
   try {
     const stores = await gemini.listStores();
-    ctx.body = { stores };
+    const storesWithProtection = stores.map((store) => ({
+      ...store,
+      protected: store.name ? isProtectedStore(store.name) : false,
+    }));
+    ctx.body = { stores: storesWithProtection };
   } catch (error) {
     ctx.status = 500;
     ctx.body = { message: error instanceof Error ? error.message : 'Failed to list stores' };
@@ -50,6 +72,14 @@ router.get('/:name', async (ctx) => {
 router.delete('/:name', async (ctx) => {
   try {
     const name = decodeURIComponent(ctx.params['name'] as string);
+
+    // Check if store is protected
+    if (isProtectedStore(name)) {
+      ctx.status = 403;
+      ctx.body = { message: 'This store is protected and cannot be deleted' };
+      return;
+    }
+
     const force = ctx.query.force === 'true';
 
     await gemini.deleteStore(name, force);

@@ -87,6 +87,9 @@ export function StoreList({ onCreateStore, onStoreDeleted }: StoreListProps) {
 
   const handleDelete = (e: React.MouseEvent | React.KeyboardEvent, store: FileSearchStore) => {
     e.stopPropagation();
+    if (store.protected) {
+      return;
+    }
     if (confirm(`Are you sure you want to delete "${store.displayName}"?`)) {
       deleteStore.mutate(
         { storeName: store.name, force: true },
@@ -112,6 +115,10 @@ export function StoreList({ onCreateStore, onStoreDeleted }: StoreListProps) {
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
+          // Skip if store is protected
+          if (store.protected) {
+            break;
+          }
           // Inline delete logic to avoid dependency issues
           if (confirm(`Are you sure you want to delete "${store.displayName}"?`)) {
             deleteStore.mutate(
@@ -237,23 +244,25 @@ export function StoreList({ onCreateStore, onStoreDeleted }: StoreListProps) {
                   aria-hidden="true"
                 />
                 <span className="flex-1 truncate text-xs font-medium">{store.displayName}</span>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={(e) => handleDelete(e, store)}
-                  disabled={deleteStore.isPending}
-                  className="flex-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-destructive/20 transition-opacity"
-                  aria-label={`Delete ${store.displayName}`}
-                >
-                  {deleteStore.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Trash2
-                      className="h-3 w-3 text-muted-foreground hover:text-destructive"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
+                {!store.protected && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={(e) => handleDelete(e, store)}
+                    disabled={deleteStore.isPending}
+                    className="flex-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-destructive/20 transition-opacity"
+                    aria-label={`Delete ${store.displayName}`}
+                  >
+                    {deleteStore.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2
+                        className="h-3 w-3 text-muted-foreground hover:text-destructive"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+                )}
               </Link>
             );
           })}
