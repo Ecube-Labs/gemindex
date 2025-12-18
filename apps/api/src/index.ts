@@ -1,4 +1,20 @@
-import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenvx from '@dotenvx/dotenvx';
+
+// Load all .env and .env.* files except .env.example
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envDir = process.env.DOTENV_PATH || path.resolve(__dirname, '..');
+const envFiles = fs
+  .readdirSync(envDir)
+  .filter((file) => /^\.env(\..+)?$/.test(file) && !file.endsWith('.example'))
+  .map((file) => path.join(envDir, file));
+
+if (envFiles.length > 0) {
+  dotenvx.config({ path: envFiles });
+}
+
 import Koa from 'koa';
 import Router from '@koa/router';
 import cors from '@koa/cors';

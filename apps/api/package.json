@@ -9,10 +9,10 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.51.2",
     "@koa/cors": "^5.0.0",
     "@koa/multer": "^3.0.2",
     "@koa/router": "^13.1.0",
-    "dotenv": "^16.4.7",
     "form-data": "^4.0.1",
     "koa": "^3.1.1",
     "koa-bodyparser": "^4.4.1",
