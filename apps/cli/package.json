@@ -1,6 +1,6 @@
 {
   "name": "@gemindex/cli",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "CLI for syncing files to Gemini File Search stores",
   "type": "module",
   "license": "MIT",
