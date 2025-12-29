@@ -1,0 +1,157 @@
+{
+  "name": "@gemindex/cli",
+  "version": "0.0.1",
+  "description": "CLI for syncing files to Gemini File Search stores",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ecube-Labs/gemindex.git",
+    "directory": "apps/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Ecube-Labs/gemindex/issues"
+  },
+  "homepage": "https://github.com/ecubelabs/gemindex/tree/main/apps/cli#readme",
+  "keywords": [
+    "gemini",
+    "file-search",
+    "sync",
+    "cli"
+  ],
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "bin": {
+    "gemindex": "./bin/gemindex.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@henrygd/queue": "^1.0.1",
+    "commander": "^13.1.0",
+    "fast-glob": "^3.3.3",
+    "ora": "^8.1.1",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/node": "^22.10.2",
+    "semantic-release": "^24.2.1",
+    "semantic-release-yarn": "^3.0.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "release": {
+    "branches": [
+      "main",
+      {
+        "name": "develop",
+        "prerelease": "next"
+      }
+    ],
+    "tagFormat": "cli-v${version}",
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits",
+          "releaseRules": [
+            {
+              "type": "feat",
+              "release": "minor"
+            },
+            {
+              "type": "fix",
+              "release": "patch"
+            },
+            {
+              "type": "perf",
+              "release": "patch"
+            },
+            {
+              "type": "refactor",
+              "release": "patch"
+            },
+            {
+              "type": "docs",
+              "scope": "README",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      [
+        "@semantic-release/release-notes-generator",
+        {
+          "preset": "conventionalcommits",
+          "presetConfig": {
+            "types": [
+              {
+                "type": "feat",
+                "section": "Features"
+              },
+              {
+                "type": "fix",
+                "section": "Bug Fixes"
+              },
+              {
+                "type": "perf",
+                "section": "Performance"
+              },
+              {
+                "type": "refactor",
+                "section": "Refactoring"
+              },
+              {
+                "type": "docs",
+                "section": "Documentation"
+              },
+              {
+                "type": "chore",
+                "hidden": true
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "@semantic-release/changelog",
+        {
+          "changelogFile": "CHANGELOG.md"
+        }
+      ],
+      [
+        "semantic-release-yarn",
+        {
+          "npmPublish": true,
+          "tarballDir": "dist"
+        }
+      ],
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "CHANGELOG.md"
+          ],
+          "message": "chore(release): cli ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "releasedLabels": [
+            "released"
+          ]
+        }
+      ]
+    ]
+  }
+}
