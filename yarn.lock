@@ -921,7 +921,6 @@ __metadata:
     "@types/node": "npm:^22.10.2"
     commander: "npm:^13.1.0"
     fast-glob: "npm:^3.3.3"
-    form-data: "npm:^4.0.1"
     ora: "npm:^8.1.1"
     picocolors: "npm:^1.1.1"
     semantic-release: "npm:^24.2.1"

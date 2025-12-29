@@ -112,8 +112,8 @@ export const syncCommand = new Command('sync')
       let uploadResults: UploadResult[] = [];
       if (plan.uploads.length > 0) {
         console.log();
-        spinner = ora(`Uploading ${plan.uploads.length} file(s)...`).start();
-        let completed = 0;
+        const total = plan.uploads.length;
+        spinner = ora(`Uploading (0/${total})`).start();
 
         uploadResults = await executeUploads(
           client,
@@ -121,21 +121,26 @@ export const syncCommand = new Command('sync')
           plan.uploads,
           { concurrency },
           graceful.signal,
-          () => {
-            completed++;
-            spinner!.text = `Uploading ${plan.uploads.length} file(s)... (${completed}/${plan.uploads.length})`;
+          (progress) => {
+            const status = progress.result
+              ? progress.result.success
+                ? pc.green('✓')
+                : pc.red('✗')
+              : pc.cyan('↑');
+            spinner!.text = `Uploading (${progress.completed}/${total}) ${status} ${pc.dim(progress.currentFile)}`;
           }
         );
 
         const failed = uploadResults.filter((r) => !r.success && !r.cancelled).length;
         const cancelled = uploadResults.filter((r) => r.cancelled).length;
+        const succeeded = uploadResults.filter((r) => r.success).length;
 
         if (cancelled > 0) {
-          spinner.warn(`Cancelled (${completed - cancelled} uploaded, ${cancelled} remaining)`);
+          spinner.warn(`Cancelled (${succeeded} uploaded, ${cancelled} remaining)`);
         } else if (failed > 0) {
-          spinner.warn(`Uploaded with ${failed} error(s)`);
+          spinner.warn(`Uploaded ${succeeded} file(s) with ${failed} error(s)`);
         } else {
-          spinner.succeed(`Uploaded ${uploadResults.length} file(s)`);
+          spinner.succeed(`Uploaded ${succeeded} file(s)`);
         }
       }
 

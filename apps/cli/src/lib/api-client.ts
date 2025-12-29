@@ -1,5 +1,5 @@
-import FormData from 'form-data';
-import fs from 'fs';
+import fs from 'fs/promises';
+import path from 'path';
 import type { RemoteFile } from '../types/index.js';
 
 export interface ApiClientConfig {
@@ -46,14 +46,12 @@ export class ApiClient {
       throw new Error(`Failed to list files: ${(error as { message: string }).message}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { files?: ApiFileResponse[] } | ApiFileResponse[];
 
-    // Handle empty or non-array responses
-    if (!data || !Array.isArray(data)) {
-      return [];
-    }
+    // Handle both { files: [...] } and direct array responses
+    const files = Array.isArray(data) ? data : (data.files ?? []);
 
-    return (data as ApiFileResponse[]).map((f) => ({
+    return files.map((f) => ({
       name: f.name,
       displayName: f.displayName,
       originalFileName: f.originalDisplayName || f.displayName,
@@ -71,22 +69,21 @@ export class ApiClient {
     displayName: string,
     signal?: AbortSignal
   ): Promise<{ success: boolean; error?: string }> {
+    // Read file as buffer and create Blob
+    const fileBuffer = await fs.readFile(filePath);
+    const fileName = path.basename(displayName);
+
+    // Use native FormData (available in Node.js 18+)
     const form = new FormData();
-    const fileStream = fs.createReadStream(filePath);
+    const blob = new Blob([fileBuffer]);
+    form.append('file', blob, fileName);
 
-    form.append('file', fileStream, {
-      filename: displayName,
-    });
-
-    // FormData with node-fetch requires special handling
     const response = await fetch(
       `${this.baseUrl}/api/stores/${encodeURIComponent(storeName)}/files`,
       {
         method: 'POST',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        body: form as any,
+        body: form,
         headers: {
-          ...form.getHeaders(),
           ...(this.headers['Authorization']
             ? { Authorization: this.headers['Authorization'] }
             : {}),

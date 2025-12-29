@@ -81,6 +81,13 @@ async function uploadWithRetry(
   };
 }
 
+export interface UploadProgress {
+  completed: number;
+  total: number;
+  currentFile: string;
+  result?: UploadResult;
+}
+
 /**
  * Execute uploads with concurrency control.
  */
@@ -90,7 +97,7 @@ export async function executeUploads(
   actions: SyncAction[],
   config: Partial<UploaderConfig>,
   signal?: AbortSignal,
-  onProgress?: (result: UploadResult) => void
+  onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult[]> {
   const concurrency = config.concurrency || 8;
   const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -98,6 +105,8 @@ export async function executeUploads(
 
   const results: UploadResult[] = [];
   const queue = newQueue(concurrency);
+  let completed = 0;
+  const total = actions.length;
 
   for (const action of actions) {
     if (signal?.aborted) {
@@ -113,6 +122,15 @@ export async function executeUploads(
     }
 
     queue.add(async () => {
+      const fileName = action.localFile?.relativePath || 'unknown';
+
+      // Notify start of upload
+      onProgress?.({
+        completed,
+        total,
+        currentFile: fileName,
+      });
+
       const result = await uploadWithRetry(
         client,
         storeName,
@@ -122,7 +140,15 @@ export async function executeUploads(
         signal
       );
       results.push(result);
-      onProgress?.(result);
+      completed++;
+
+      // Notify completion
+      onProgress?.({
+        completed,
+        total,
+        currentFile: fileName,
+        result,
+      });
     });
   }
 
