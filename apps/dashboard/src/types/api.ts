@@ -11,6 +11,7 @@ export interface FileSearchStoreFile {
   name: string;
   displayName: string;
   originalDisplayName?: string; // Original filename from Files API
+  sha256?: string; // SHA256 hash for sync comparison
   state:
     | 'STATE_PENDING_PROCESSING'
     | 'STATE_ACTIVE'

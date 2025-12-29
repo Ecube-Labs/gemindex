@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -59,6 +60,7 @@ export interface FileSearchStoreFile {
   name: string;
   displayName?: string;
   originalDisplayName?: string; // Original filename (from customMetadata or Files API)
+  sha256?: string; // SHA256 hash for sync comparison (from customMetadata)
   state?: string;
   createTime?: string;
   updateTime?: string;
@@ -114,6 +116,13 @@ function getOriginalFileName(customMetadata?: CustomMetadata[]): string | undefi
   return meta?.stringValue;
 }
 
+// Helper to extract sha256 hash from customMetadata
+function getSha256(customMetadata?: CustomMetadata[]): string | undefined {
+  if (!customMetadata) return undefined;
+  const meta = customMetadata.find((m) => m.key === 'sha256');
+  return meta?.stringValue;
+}
+
 // File operations (documents in Gemini API terminology)
 export async function listFiles(storeName: string): Promise<FileSearchStoreFile[]> {
   const name = storeName.startsWith('fileSearchStores/')
@@ -123,10 +132,11 @@ export async function listFiles(storeName: string): Promise<FileSearchStoreFile[
     const data = await fetchApi<{ documents?: FileSearchStoreFile[] }>(`/${name}/documents`);
     const documents = data.documents ?? [];
 
-    // Extract original filename from customMetadata
+    // Extract original filename and sha256 from customMetadata
     return documents.map((doc) => ({
       ...doc,
       originalDisplayName: getOriginalFileName(doc.customMetadata),
+      sha256: getSha256(doc.customMetadata),
     }));
   } catch (error) {
     console.error('Error listing files:', error);
@@ -152,6 +162,8 @@ export async function uploadFile(
   const displayName = config?.displayName || path.basename(filePath);
   // Use displayName for mimeType detection since filePath might be a temp file without extension
   const mimeType = getMimeType(displayName);
+  // Calculate SHA256 hash for sync comparison
+  const fileHash = crypto.createHash('sha256').update(fileContent).digest('hex');
 
   // Step 0: Delete existing files with the same originalFileName (overwrite behavior)
   const existingFiles = await listFiles(storeName);
@@ -229,6 +241,7 @@ export async function uploadFile(
       custom_metadata: [
         { key: 'originalFileName', string_value: displayName },
         { key: 'uploadedAt', string_value: new Date().toISOString() },
+        { key: 'sha256', string_value: fileHash },
       ],
     }),
   });

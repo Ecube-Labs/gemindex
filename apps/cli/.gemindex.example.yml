@@ -1,0 +1,26 @@
+# Example configuration for gemindex CLI
+# Copy this file to .gemindex.yml and customize for your project
+
+version: 1
+
+# Target store name (required)
+store: "my-docs-store"
+
+# File collection settings
+collect:
+  include:
+    - "docs/**/*.md"
+    - "schemas/**/*.json"
+  exclude:
+    - "**/*.draft.md"
+    - "**/node_modules/**"
+
+# Sync options
+sync:
+  delete: false      # Set to true to delete remote files not in local
+  concurrency: 8     # Parallel upload limit
+
+# API settings
+api:
+  endpoint: "http://localhost:4000"
+  # token_env: "GEMINDEX_TOKEN"  # Optional: environment variable for Bearer token
