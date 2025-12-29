@@ -53,9 +53,7 @@ export interface FileSearchStore {
 export interface CustomMetadata {
   key: string;
   stringValue?: string;
-  string_value?: string; // Gemini API may return snake_case
   numericValue?: number;
-  numeric_value?: number;
 }
 
 export interface FileSearchStoreFile {
@@ -111,26 +109,18 @@ export async function deleteStore(name: string, force = false): Promise<void> {
   });
 }
 
-// Helper to extract string value from customMetadata (handles both camelCase and snake_case)
-function getMetadataString(meta?: CustomMetadata): string | undefined {
-  return meta?.stringValue ?? meta?.string_value;
-}
-
 // Helper to extract original filename from customMetadata
 function getOriginalFileName(customMetadata?: CustomMetadata[]): string | undefined {
   if (!customMetadata) return undefined;
   const meta = customMetadata.find((m) => m.key === 'originalFileName');
-  return getMetadataString(meta);
+  return meta?.stringValue;
 }
 
 // Helper to extract sha256 hash from customMetadata
 function getSha256(customMetadata?: CustomMetadata[]): string | undefined {
   if (!customMetadata) return undefined;
-  // Try multiple key names (Gemini API may filter certain keys)
-  const meta = customMetadata.find(
-    (m) => m.key === 'contentHash' || m.key === 'sha256' || m.key === 'checksum'
-  );
-  return getMetadataString(meta);
+  const meta = customMetadata.find((m) => m.key === 'sha256');
+  return meta?.stringValue;
 }
 
 // File operations (documents in Gemini API terminology)
@@ -251,7 +241,7 @@ export async function uploadFile(
       custom_metadata: [
         { key: 'originalFileName', string_value: displayName },
         { key: 'uploadedAt', string_value: new Date().toISOString() },
-        { key: 'contentHash', string_value: fileHash },
+        { key: 'sha256', string_value: fileHash },
       ],
     }),
   });
