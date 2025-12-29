@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for semantic-release to analyze commits
-          persist-credentials: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,9 +42,23 @@ jobs:
       - name: Build CLI
         run: yarn workspace @gemindex/cli build
 
+      - name: Configure npm authentication
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_TOKEN }}
+          yarn config set npmAlwaysAuth true
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Release
         working-directory: apps/cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
         run: npx semantic-release
