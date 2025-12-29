@@ -1,3 +1,8 @@
+## 1.2.0-next.2 (2025-12-29)
+
+* Merge branch 'improve-file-names' into develop ([b7204ff](https://github.com/Ecube-Labs/gemindex/commit/b7204ff))
+* fix(api): handle Gemini API metadata key filtering and casing issues ([b508d41](https://github.com/Ecube-Labs/gemindex/commit/b508d41))
+
 ## 1.2.0-next.1 (2025-12-29)
 
 * feat: implement pathToFilename function for safe filename conversion in sync and upload processes ([f522298](https://github.com/Ecube-Labs/gemindex/commit/f522298))
