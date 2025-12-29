@@ -1,6 +1,14 @@
 import type { LocalFile, RemoteFile, SyncPlan } from '../types/index.js';
 
 /**
+ * Convert a file path to a safe filename by replacing path separators with underscores.
+ * e.g., "docs/guide.md" → "docs_guide.md"
+ */
+function pathToFilename(relativePath: string): string {
+  return relativePath.replace(/[/\\]/g, '_');
+}
+
+/**
  * Build a sync plan by comparing local and remote files.
  */
 export function buildSyncPlan(
@@ -26,7 +34,9 @@ export function buildSyncPlan(
   // Process local files
   for (const local of localFiles) {
     const localHash = localHashes.get(local.absolutePath);
-    const remote = remoteByName.get(local.relativePath);
+    // Convert local path to filename format for comparison (e.g., "docs/guide.md" → "docs_guide.md")
+    const localFileName = pathToFilename(local.relativePath);
+    const remote = remoteByName.get(localFileName);
 
     if (!remote) {
       // File doesn't exist remotely - upload
@@ -62,7 +72,7 @@ export function buildSyncPlan(
     }
 
     // Remove from map to track what's left
-    remoteByName.delete(local.relativePath);
+    remoteByName.delete(localFileName);
   }
 
   // Remaining remote files are orphans

@@ -14,6 +14,14 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_BASE_DELAY_MS = 1000;
 
 /**
+ * Convert a file path to a safe filename by replacing path separators with underscores.
+ * e.g., "docs/guide.md" → "docs_guide.md"
+ */
+function pathToFilename(relativePath: string): string {
+  return relativePath.replace(/[/\\]/g, '_');
+}
+
+/**
  * Upload a single file with retry logic.
  */
 async function uploadWithRetry(
@@ -48,10 +56,13 @@ async function uploadWithRetry(
     }
 
     try {
+      // Convert path to safe filename (e.g., "docs/guide.md" → "docs_guide.md")
+      const displayName = pathToFilename(action.localFile.relativePath);
+
       const result = await client.uploadFile(
         storeName,
         action.localFile.absolutePath,
-        action.localFile.relativePath,
+        displayName,
         signal
       );
 
