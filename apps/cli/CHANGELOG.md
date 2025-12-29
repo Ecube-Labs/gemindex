@@ -1,3 +1,7 @@
+## <small>1.2.1 (2025-12-29)</small>
+
+* fix: improve error message for API connection failures ([8b3ab9c](https://github.com/Ecube-Labs/gemindex/commit/8b3ab9c))
+
 ## 1.2.0 (2025-12-29)
 
 * Merge pull request #3 from Ecube-Labs/improve-file-names ([d07fb3f](https://github.com/Ecube-Labs/gemindex/commit/d07fb3f)), closes [#3](https://github.com/Ecube-Labs/gemindex/issues/3)
