@@ -15,6 +15,55 @@ interface ApiFileResponse {
   state: string;
 }
 
+/**
+ * Custom error class for API connection failures.
+ */
+export class ApiConnectionError extends Error {
+  constructor(
+    message: string,
+    public readonly endpoint: string,
+    public readonly cause?: Error
+  ) {
+    super(message);
+    this.name = 'ApiConnectionError';
+  }
+}
+
+/**
+ * Wrap fetch to provide helpful error messages for connection failures.
+ */
+async function fetchWithConnectionCheck(url: string, options?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    const endpoint = new URL(url).origin;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Check for common connection error patterns
+    if (
+      errorMessage.includes('fetch failed') ||
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ENOTFOUND') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('network')
+    ) {
+      throw new ApiConnectionError(
+        `Cannot connect to API server at ${endpoint}\n\n` +
+          `Possible solutions:\n` +
+          `  1. Check if the API server is running\n` +
+          `  2. Verify the endpoint URL in your config file\n` +
+          `  3. Check your network connection\n` +
+          `  4. If using a custom endpoint, ensure it's accessible\n\n` +
+          `Original error: ${errorMessage}`,
+        endpoint,
+        error instanceof Error ? error : undefined
+      );
+    }
+
+    throw error;
+  }
+}
+
 export class ApiClient {
   private baseUrl: string;
   private headers: Record<string, string>;
@@ -33,7 +82,7 @@ export class ApiClient {
    * List files in a store.
    */
   async listFiles(storeName: string, signal?: AbortSignal): Promise<RemoteFile[]> {
-    const response = await fetch(
+    const response = await fetchWithConnectionCheck(
       `${this.baseUrl}/api/stores/${encodeURIComponent(storeName)}/files`,
       {
         headers: this.headers,
@@ -78,16 +127,17 @@ export class ApiClient {
     const blob = new Blob([fileBuffer]);
     form.append('file', blob, fileName);
 
-    const response = await fetch(
+    const headers: Record<string, string> = {};
+    if (this.headers['Authorization']) {
+      headers['Authorization'] = this.headers['Authorization'];
+    }
+
+    const response = await fetchWithConnectionCheck(
       `${this.baseUrl}/api/stores/${encodeURIComponent(storeName)}/files`,
       {
         method: 'POST',
         body: form,
-        headers: {
-          ...(this.headers['Authorization']
-            ? { Authorization: this.headers['Authorization'] }
-            : {}),
-        },
+        headers,
         signal,
       }
     );
@@ -104,7 +154,7 @@ export class ApiClient {
    * Delete a file from a store.
    */
   async deleteFile(storeName: string, documentName: string, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(
+    const response = await fetchWithConnectionCheck(
       `${this.baseUrl}/api/stores/${encodeURIComponent(storeName)}/files/${encodeURIComponent(documentName)}`,
       {
         method: 'DELETE',
