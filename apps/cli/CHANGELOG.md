@@ -1,3 +1,7 @@
+## 1.1.0 (2025-12-29)
+
+* feat: add publishConfig for public access in package.json ([410a0d0](https://github.com/Ecube-Labs/gemindex/commit/410a0d0))
+
 ## 1.0.0 (2025-12-29)
 
 * fix: update npm publish workflow to use GITHUB_TOKEN for checkout and configure Git credentials ([2fecaff](https://github.com/Ecube-Labs/gemindex/commit/2fecaff))
