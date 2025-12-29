@@ -19,6 +19,9 @@
     "sync",
     "cli"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "bin",
     "dist"
