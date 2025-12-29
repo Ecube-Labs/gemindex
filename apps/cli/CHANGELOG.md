@@ -1,3 +1,7 @@
+## 1.2.0-next.1 (2025-12-29)
+
+* feat: implement pathToFilename function for safe filename conversion in sync and upload processes ([f522298](https://github.com/Ecube-Labs/gemindex/commit/f522298))
+
 ## 1.1.0 (2025-12-29)
 
 * feat: add publishConfig for public access in package.json ([410a0d0](https://github.com/Ecube-Labs/gemindex/commit/410a0d0))
