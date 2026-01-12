@@ -24,6 +24,7 @@ import storesRouter from './routes/stores.js';
 import filesRouter from './routes/files.js';
 import searchRouter from './routes/search.js';
 import operationsRouter from './routes/operations.js';
+import mcpRouter from './routes/mcp.js';
 
 const app = new Koa();
 const router = new Router();
@@ -73,6 +74,8 @@ app.use(searchRouter.routes());
 app.use(searchRouter.allowedMethods());
 app.use(operationsRouter.routes());
 app.use(operationsRouter.allowedMethods());
+app.use(mcpRouter.routes());
+app.use(mcpRouter.allowedMethods());
 
 const PORT = process.env.PORT || 4000;
 
