@@ -66,10 +66,16 @@ gemindex/
 │   │   │   ├── lib/        # Utilities, API client
 │   │   │   └── types/      # TypeScript types
 │   │   └── ...
-│   └── api/                # Koa.js backend
-│       ├── src/
-│       │   └── index.ts    # Server entry point
-│       └── ...
+│   ├── api/                # Koa.js backend
+│   │   ├── src/
+│   │   │   ├── mcp/        # MCP Server implementation
+│   │   │   └── index.ts    # Server entry point
+│   │   └── ...
+│   └── mcp/                # MCP stdio proxy CLI (@gemindex/mcp)
+│       └── src/
+│           ├── index.ts    # CLI entry point
+│           ├── auth.ts     # OAuth cookie capture (Playwright)
+│           └── proxy.ts    # MCP stdio-to-HTTP proxy
 ├── .husky/                 # Git hooks
 ├── package.json            # Root workspace configuration
 └── tsconfig.json           # Shared TypeScript configuration
@@ -193,6 +199,8 @@ GemIndex provides a Remote MCP (Model Context Protocol) Server that allows AI cl
 
 ### Client Configuration
 
+#### Option 1: Direct HTTP Connection (Local/No Auth)
+
 **Claude Code (`.mcp.json`)**:
 
 ```json
@@ -217,6 +225,44 @@ GemIndex provides a Remote MCP (Model Context Protocol) Server that allows AI cl
     }
   }
 }
+```
+
+#### Option 2: @gemindex/mcp CLI (OAuth2 Proxy Support)
+
+For environments behind OAuth2 Proxy (e.g., Google SSO), use the `@gemindex/mcp` CLI which automatically captures OAuth cookies via Playwright.
+
+**Claude Code (`.mcp.json`)**:
+
+```json
+{
+  "mcpServers": {
+    "knowledge_base": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@gemindex/mcp", "--host=https://gemindex-stage.ecubelabs.xyz"]
+    }
+  }
+}
+```
+
+**How it works**:
+
+1. On first run, opens a browser for OAuth login
+2. User completes login (Google SSO, etc.)
+3. Captures `_oauth2_proxy` cookie automatically
+4. Caches cookie in `~/.gemindex/cookies.json`
+5. Proxies MCP requests with the cookie header
+
+**CLI Options**:
+
+```bash
+gemindex-mcp [options]
+
+Options:
+  --host=<url>    Target GemIndex server URL (default: gemindex-stage)
+  --no-auth       Skip OAuth authentication (auto-enabled for localhost)
+  --clear, -c     Clear cached cookie and re-authenticate
+  --help, -h      Show help
 ```
 
 ### Authentication (Optional)
