@@ -22,11 +22,15 @@ gemindex/
 │       ├── src/
 │       │   ├── lib/
 │       │   │   └── gemini.ts     # Gemini REST API client
+│       │   ├── mcp/
+│       │   │   ├── server.ts     # MCP Server instance
+│       │   │   └── tools/        # MCP Tools (stores, files, search, operations)
 │       │   └── routes/
 │       │       ├── stores.ts     # Store CRUD operations
 │       │       ├── files.ts      # File upload/delete
 │       │       ├── search.ts     # Semantic search
-│       │       └── operations.ts # Operation status
+│       │       ├── operations.ts # Operation status
+│       │       └── mcp.ts        # MCP Server endpoint
 │       └── ...
 ├── .husky/                 # Git hooks (pre-commit, commit-msg)
 ├── package.json            # Yarn Berry workspaces
@@ -55,6 +59,7 @@ gemindex/
 | DELETE | `/api/stores/:name/files/:fileName` | Delete a file                       |
 | POST   | `/api/search`                       | Perform semantic search             |
 | GET    | `/api/operations/:name`             | Get operation status                |
+| POST   | `/mcp`                              | MCP Server endpoint (JSON-RPC)      |
 
 ## Development Commands
 
@@ -84,6 +89,11 @@ yarn format
 # apps/api/.env
 PORT=4000
 GEMINI_API_KEY=your_api_key
+
+# MCP Authentication (optional)
+MCP_AUTH_ENABLED=false
+MCP_AUTH_USERNAME=
+MCP_AUTH_PASSWORD=
 ```
 
 ## Gemini File Search API
@@ -108,5 +118,8 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 ## Key Files
 
 - `apps/api/src/lib/gemini.ts`: Gemini REST API client (stores/files/search)
+- `apps/api/src/mcp/server.ts`: MCP Server instance creation
+- `apps/api/src/mcp/tools/`: MCP Tools (list_stores, get_store, list_files, search, get_operation)
+- `apps/api/src/routes/mcp.ts`: MCP HTTP endpoint with Basic Auth middleware
 - `apps/dashboard/src/lib/api.ts`: Frontend API client
 - `apps/dashboard/src/hooks/`: React Query hooks (use-stores, use-files, use-search)

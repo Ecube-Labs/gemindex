@@ -24,6 +24,7 @@ import storesRouter from './routes/stores.js';
 import filesRouter from './routes/files.js';
 import searchRouter from './routes/search.js';
 import operationsRouter from './routes/operations.js';
+import mcpRouter from './routes/mcp.js';
 
 const app = new Koa();
 const router = new Router();
@@ -37,6 +38,25 @@ router.get('/api/health', (ctx) => {
 router.get('/ping', (ctx) => {
   ctx.body = 'pong';
 });
+
+// OAuth/OIDC discovery endpoints - not supported (prevents 404 JSON parse error in MCP clients)
+const oauthNotSupported = (ctx: Router.RouterContext) => {
+  ctx.status = 404;
+  ctx.body = {
+    error: 'oauth_not_supported',
+    error_description:
+      'This server does not support OAuth. Use Basic Auth if MCP_AUTH_ENABLED=true.',
+  };
+};
+
+router.get('/.well-known/oauth-authorization-server', oauthNotSupported);
+router.get('/.well-known/oauth-authorization-server/(.*)', oauthNotSupported);
+router.get('/.well-known/openid-configuration', oauthNotSupported);
+router.get('/.well-known/openid-configuration/(.*)', oauthNotSupported);
+router.get('/.well-known/oauth-protected-resource', oauthNotSupported);
+router.get('/.well-known/oauth-protected-resource/(.*)', oauthNotSupported);
+router.get('/mcp/.well-known/(.*)', oauthNotSupported);
+router.post('/register', oauthNotSupported);
 
 // Request logging middleware
 app.use(async (ctx, next) => {
@@ -73,6 +93,8 @@ app.use(searchRouter.routes());
 app.use(searchRouter.allowedMethods());
 app.use(operationsRouter.routes());
 app.use(operationsRouter.allowedMethods());
+app.use(mcpRouter.routes());
+app.use(mcpRouter.allowedMethods());
 
 const PORT = process.env.PORT || 4000;
 
