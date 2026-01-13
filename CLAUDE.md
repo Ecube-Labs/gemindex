@@ -18,20 +18,25 @@ gemindex/
 │   │   │   ├── lib/              # API client, utilities
 │   │   │   └── types/            # TypeScript types
 │   │   └── ...
-│   └── api/                # Node.js backend
-│       ├── src/
-│       │   ├── lib/
-│       │   │   └── gemini.ts     # Gemini REST API client
-│       │   ├── mcp/
-│       │   │   ├── server.ts     # MCP Server instance
-│       │   │   └── tools/        # MCP Tools (stores, files, search, operations)
-│       │   └── routes/
-│       │       ├── stores.ts     # Store CRUD operations
-│       │       ├── files.ts      # File upload/delete
-│       │       ├── search.ts     # Semantic search
-│       │       ├── operations.ts # Operation status
-│       │       └── mcp.ts        # MCP Server endpoint
-│       └── ...
+│   ├── api/                # Node.js backend
+│   │   ├── src/
+│   │   │   ├── lib/
+│   │   │   │   └── gemini.ts     # Gemini REST API client
+│   │   │   ├── mcp/
+│   │   │   │   ├── server.ts     # MCP Server instance
+│   │   │   │   └── tools/        # MCP Tools (stores, files, search, operations)
+│   │   │   └── routes/
+│   │   │       ├── stores.ts     # Store CRUD operations
+│   │   │       ├── files.ts      # File upload/delete
+│   │   │       ├── search.ts     # Semantic search
+│   │   │       ├── operations.ts # Operation status
+│   │   │       └── mcp.ts        # MCP Server endpoint
+│   │   └── ...
+│   └── mcp/                # MCP stdio proxy CLI (@gemindex/mcp)
+│       └── src/
+│           ├── index.ts    # CLI entry point
+│           ├── auth.ts     # OAuth cookie capture (Playwright)
+│           └── proxy.ts    # MCP stdio-to-HTTP proxy
 ├── .husky/                 # Git hooks (pre-commit, commit-msg)
 ├── package.json            # Yarn Berry workspaces
 └── tsconfig.json           # Shared TypeScript configuration
@@ -73,6 +78,7 @@ yarn dev
 # Run individual apps
 yarn workspace @gemindex/dashboard dev  # localhost:3000
 yarn workspace @gemindex/api dev         # localhost:4000
+yarn workspace @gemindex/mcp dev         # MCP stdio proxy CLI
 
 # Build
 yarn build
@@ -121,5 +127,8 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 - `apps/api/src/mcp/server.ts`: MCP Server instance creation
 - `apps/api/src/mcp/tools/`: MCP Tools (list_stores, get_store, list_files, search, get_operation)
 - `apps/api/src/routes/mcp.ts`: MCP HTTP endpoint with Basic Auth middleware
+- `apps/mcp/src/index.ts`: MCP stdio proxy CLI entry point
+- `apps/mcp/src/auth.ts`: OAuth cookie capture via Playwright
+- `apps/mcp/src/proxy.ts`: MCP stdio-to-HTTP proxy implementation
 - `apps/dashboard/src/lib/api.ts`: Frontend API client
 - `apps/dashboard/src/hooks/`: React Query hooks (use-stores, use-files, use-search)
