@@ -39,6 +39,25 @@ router.get('/ping', (ctx) => {
   ctx.body = 'pong';
 });
 
+// OAuth/OIDC discovery endpoints - not supported (prevents 404 JSON parse error in MCP clients)
+const oauthNotSupported = (ctx: Router.RouterContext) => {
+  ctx.status = 404;
+  ctx.body = {
+    error: 'oauth_not_supported',
+    error_description:
+      'This server does not support OAuth. Use Basic Auth if MCP_AUTH_ENABLED=true.',
+  };
+};
+
+router.get('/.well-known/oauth-authorization-server', oauthNotSupported);
+router.get('/.well-known/oauth-authorization-server/(.*)', oauthNotSupported);
+router.get('/.well-known/openid-configuration', oauthNotSupported);
+router.get('/.well-known/openid-configuration/(.*)', oauthNotSupported);
+router.get('/.well-known/oauth-protected-resource', oauthNotSupported);
+router.get('/.well-known/oauth-protected-resource/(.*)', oauthNotSupported);
+router.get('/mcp/.well-known/(.*)', oauthNotSupported);
+router.post('/register', oauthNotSupported);
+
 // Request logging middleware
 app.use(async (ctx, next) => {
   const start = Date.now();

@@ -10,7 +10,11 @@ export function registerFileTools(server: McpServer): void {
       title: 'List Files',
       description: 'List all files in a specific store',
       inputSchema: {
-        storeName: z.string().describe('Store name or ID'),
+        storeName: z
+          .string()
+          .describe(
+            'Store identifier. Use the "name" field from list_stores (e.g., "fileSearchStores/timtest-06m38rk98z12") or just the ID part (e.g., "timtest-06m38rk98z12")'
+          ),
       },
     },
     async ({ storeName }) => {

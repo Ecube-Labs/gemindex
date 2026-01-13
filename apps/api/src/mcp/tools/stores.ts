@@ -43,7 +43,11 @@ export function registerStoreTools(server: McpServer): void {
       title: 'Get Store',
       description: 'Get details of a specific file search store',
       inputSchema: {
-        name: z.string().describe('Store name or ID (e.g., "fileSearchStores/abc123" or "abc123")'),
+        name: z
+          .string()
+          .describe(
+            'Store identifier. Use the "name" field from list_stores (e.g., "fileSearchStores/timtest-06m38rk98z12") or just the ID part (e.g., "timtest-06m38rk98z12")'
+          ),
       },
     },
     async ({ name }) => {

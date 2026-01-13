@@ -11,7 +11,11 @@ export function registerSearchTool(server: McpServer): void {
       description:
         'Search documents in a store using natural language query powered by Gemini. Returns the answer along with source citations.',
       inputSchema: {
-        storeName: z.string().describe('Store name or ID to search in'),
+        storeName: z
+          .string()
+          .describe(
+            'Store identifier to search in. Use the "name" field from list_stores (e.g., "fileSearchStores/timtest-06m38rk98z12") or just the ID part (e.g., "timtest-06m38rk98z12")'
+          ),
         query: z.string().describe('Natural language search query'),
         systemPrompt: z
           .string()

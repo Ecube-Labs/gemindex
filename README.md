@@ -198,7 +198,7 @@ GemIndex provides a Remote MCP (Model Context Protocol) Server that allows AI cl
 ```json
 {
   "mcpServers": {
-    "gemindex": {
+    "knowledge_base": {
       "type": "url",
       "url": "http://localhost:4000/mcp"
     }
@@ -211,7 +211,7 @@ GemIndex provides a Remote MCP (Model Context Protocol) Server that allows AI cl
 ```json
 {
   "mcpServers": {
-    "gemindex": {
+    "knowledge_base": {
       "url": "http://localhost:4000/mcp",
       "transport": "streamable-http"
     }
@@ -242,7 +242,7 @@ MCP_AUTH_PASSWORD=your_secret_password
 ```json
 {
   "mcpServers": {
-    "gemindex": {
+    "knowledge_base": {
       "type": "url",
       "url": "http://localhost:4000/mcp",
       "headers": {
