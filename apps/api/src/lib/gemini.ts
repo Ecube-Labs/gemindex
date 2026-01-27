@@ -128,12 +128,29 @@ export async function listFiles(storeName: string): Promise<FileSearchStoreFile[
   const name = storeName.startsWith('fileSearchStores/')
     ? storeName
     : `fileSearchStores/${storeName}`;
+
   try {
-    const data = await fetchApi<{ documents?: FileSearchStoreFile[] }>(`/${name}/documents`);
-    const documents = data.documents ?? [];
+    const allDocuments: FileSearchStoreFile[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const endpoint = pageToken
+        ? `/${name}/documents?pageToken=${encodeURIComponent(pageToken)}`
+        : `/${name}/documents`;
+
+      const data = await fetchApi<{
+        documents?: FileSearchStoreFile[];
+        nextPageToken?: string;
+      }>(endpoint);
+
+      const documents = data.documents ?? [];
+      allDocuments.push(...documents);
+
+      pageToken = data.nextPageToken;
+    } while (pageToken);
 
     // Extract original filename and sha256 from customMetadata
-    return documents.map((doc) => ({
+    return allDocuments.map((doc) => ({
       ...doc,
       originalDisplayName: getOriginalFileName(doc.customMetadata),
       sha256: getSha256(doc.customMetadata),

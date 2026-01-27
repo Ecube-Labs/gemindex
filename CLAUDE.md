@@ -18,16 +18,25 @@ gemindex/
 │   │   │   ├── lib/              # API client, utilities
 │   │   │   └── types/            # TypeScript types
 │   │   └── ...
-│   └── api/                # Node.js backend
-│       ├── src/
-│       │   ├── lib/
-│       │   │   └── gemini.ts     # Gemini REST API client
-│       │   └── routes/
-│       │       ├── stores.ts     # Store CRUD operations
-│       │       ├── files.ts      # File upload/delete
-│       │       ├── search.ts     # Semantic search
-│       │       └── operations.ts # Operation status
-│       └── ...
+│   ├── api/                # Node.js backend
+│   │   ├── src/
+│   │   │   ├── lib/
+│   │   │   │   └── gemini.ts     # Gemini REST API client
+│   │   │   ├── mcp/
+│   │   │   │   ├── server.ts     # MCP Server instance
+│   │   │   │   └── tools/        # MCP Tools (stores, files, search, operations)
+│   │   │   └── routes/
+│   │   │       ├── stores.ts     # Store CRUD operations
+│   │   │       ├── files.ts      # File upload/delete
+│   │   │       ├── search.ts     # Semantic search
+│   │   │       ├── operations.ts # Operation status
+│   │   │       └── mcp.ts        # MCP Server endpoint
+│   │   └── ...
+│   └── mcp/                # MCP stdio proxy CLI (@gemindex/mcp)
+│       └── src/
+│           ├── index.ts    # CLI entry point
+│           ├── auth.ts     # OAuth cookie capture (Playwright)
+│           └── proxy.ts    # MCP stdio-to-HTTP proxy
 ├── .husky/                 # Git hooks (pre-commit, commit-msg)
 ├── package.json            # Yarn Berry workspaces
 └── tsconfig.json           # Shared TypeScript configuration
@@ -55,6 +64,7 @@ gemindex/
 | DELETE | `/api/stores/:name/files/:fileName` | Delete a file                       |
 | POST   | `/api/search`                       | Perform semantic search             |
 | GET    | `/api/operations/:name`             | Get operation status                |
+| POST   | `/mcp`                              | MCP Server endpoint (JSON-RPC)      |
 
 ## Development Commands
 
@@ -68,6 +78,7 @@ yarn dev
 # Run individual apps
 yarn workspace @gemindex/dashboard dev  # localhost:3000
 yarn workspace @gemindex/api dev         # localhost:4000
+yarn workspace @gemindex/mcp dev         # MCP stdio proxy CLI
 
 # Build
 yarn build
@@ -84,6 +95,11 @@ yarn format
 # apps/api/.env
 PORT=4000
 GEMINI_API_KEY=your_api_key
+
+# MCP Authentication (optional)
+MCP_AUTH_ENABLED=false
+MCP_AUTH_USERNAME=
+MCP_AUTH_PASSWORD=
 ```
 
 ## Gemini File Search API
@@ -108,5 +124,11 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 ## Key Files
 
 - `apps/api/src/lib/gemini.ts`: Gemini REST API client (stores/files/search)
+- `apps/api/src/mcp/server.ts`: MCP Server instance creation
+- `apps/api/src/mcp/tools/`: MCP Tools (list_stores, get_store, list_files, search, get_operation)
+- `apps/api/src/routes/mcp.ts`: MCP HTTP endpoint with Basic Auth middleware
+- `apps/mcp/src/index.ts`: MCP stdio proxy CLI entry point
+- `apps/mcp/src/auth.ts`: OAuth cookie capture via Playwright
+- `apps/mcp/src/proxy.ts`: MCP stdio-to-HTTP proxy implementation
 - `apps/dashboard/src/lib/api.ts`: Frontend API client
 - `apps/dashboard/src/hooks/`: React Query hooks (use-stores, use-files, use-search)

@@ -66,10 +66,16 @@ gemindex/
 │   │   │   ├── lib/        # Utilities, API client
 │   │   │   └── types/      # TypeScript types
 │   │   └── ...
-│   └── api/                # Koa.js backend
-│       ├── src/
-│       │   └── index.ts    # Server entry point
-│       └── ...
+│   ├── api/                # Koa.js backend
+│   │   ├── src/
+│   │   │   ├── mcp/        # MCP Server implementation
+│   │   │   └── index.ts    # Server entry point
+│   │   └── ...
+│   └── mcp/                # MCP stdio proxy CLI (@gemindex/mcp)
+│       └── src/
+│           ├── index.ts    # CLI entry point
+│           ├── auth.ts     # OAuth cookie capture (Playwright)
+│           └── proxy.ts    # MCP stdio-to-HTTP proxy
 ├── .husky/                 # Git hooks
 ├── package.json            # Root workspace configuration
 └── tsconfig.json           # Shared TypeScript configuration
@@ -135,11 +141,14 @@ docker run -d \
 
 ### Environment Variables
 
-| App       | Variable         | Default           | Description       |
-| --------- | ---------------- | ----------------- | ----------------- |
-| api       | `PORT`           | `4000`            | Server port       |
-| api       | `GEMINI_API_KEY` | -                 | Google AI API key |
-| dashboard | `API_URL`        | `http://api:4000` | Backend API URL   |
+| App       | Variable            | Default           | Description             |
+| --------- | ------------------- | ----------------- | ----------------------- |
+| api       | `PORT`              | `4000`            | Server port             |
+| api       | `GEMINI_API_KEY`    | -                 | Google AI API key       |
+| api       | `MCP_AUTH_ENABLED`  | `false`           | Enable MCP Basic Auth   |
+| api       | `MCP_AUTH_USERNAME` | -                 | MCP Basic Auth username |
+| api       | `MCP_AUTH_PASSWORD` | -                 | MCP Basic Auth password |
+| dashboard | `API_URL`           | `http://api:4000` | Backend API URL         |
 
 ## Features
 
@@ -172,6 +181,145 @@ docker run -d \
 | POST   | `/api/stores/:name/files`           | Upload a file           |
 | DELETE | `/api/stores/:name/files/:fileName` | Delete a file           |
 | POST   | `/api/search`                       | Perform semantic search |
+| POST   | `/mcp`                              | MCP Server endpoint     |
+
+## MCP Server
+
+GemIndex provides a Remote MCP (Model Context Protocol) Server that allows AI clients like Claude Desktop and Claude Code to access Gemini File Search functionality.
+
+### MCP Tools (Read-Only)
+
+| Tool            | Description                  | Parameters                                                                          |
+| --------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
+| `list_stores`   | List all file search stores  | -                                                                                   |
+| `get_store`     | Get store details            | `name`                                                                              |
+| `list_files`    | List files in a store        | `storeName`                                                                         |
+| `search`        | Semantic search with Gemini  | `storeName`, `query`, `systemPrompt?`, `model?`, `temperature?`, `maxOutputTokens?` |
+| `get_operation` | Check async operation status | `operationName`                                                                     |
+
+### Client Configuration
+
+#### Option 1: Direct HTTP Connection (Local/No Auth)
+
+**Claude Code (`.mcp.json`)**:
+
+```json
+{
+  "mcpServers": {
+    "knowledge_base": {
+      "type": "url",
+      "url": "http://localhost:4000/mcp"
+    }
+  }
+}
+```
+
+**Claude Desktop (`claude_desktop_config.json`)**:
+
+```json
+{
+  "mcpServers": {
+    "knowledge_base": {
+      "url": "http://localhost:4000/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+#### Option 2: @gemindex/mcp CLI (OAuth2 Proxy Support)
+
+For environments behind OAuth2 Proxy (e.g., Google SSO), use the `@gemindex/mcp` CLI which automatically captures OAuth cookies via Playwright.
+
+**Claude Code (`.mcp.json`)**:
+
+```json
+{
+  "mcpServers": {
+    "knowledge_base": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@gemindex/mcp", "--host=https://gemindex-stage.ecubelabs.xyz"]
+    }
+  }
+}
+```
+
+**How it works**:
+
+1. On first run, opens a browser for OAuth login
+2. User completes login (Google SSO, etc.)
+3. Captures `_oauth2_proxy` cookie automatically
+4. Caches cookie in `~/.gemindex/cookies.json`
+5. Proxies MCP requests with the cookie header
+
+**CLI Options**:
+
+```bash
+gemindex-mcp [options]
+
+Options:
+  --host=<url>    Target GemIndex server URL (default: gemindex-stage)
+  --no-auth       Skip OAuth authentication (auto-enabled for localhost)
+  --clear, -c     Clear cached cookie and re-authenticate
+  --help, -h      Show help
+```
+
+### Authentication (Optional)
+
+MCP Server supports optional Basic Auth via environment variables. Useful for K8s Secret injection.
+
+| Variable            | Description         | Default |
+| ------------------- | ------------------- | ------- |
+| `MCP_AUTH_ENABLED`  | Enable Basic Auth   | `false` |
+| `MCP_AUTH_USERNAME` | Basic Auth username | -       |
+| `MCP_AUTH_PASSWORD` | Basic Auth password | -       |
+
+**Example (with auth)**:
+
+```bash
+MCP_AUTH_ENABLED=true
+MCP_AUTH_USERNAME=gemindex
+MCP_AUTH_PASSWORD=your_secret_password
+```
+
+**Client with auth**:
+
+```json
+{
+  "mcpServers": {
+    "knowledge_base": {
+      "type": "url",
+      "url": "http://localhost:4000/mcp",
+      "headers": {
+        "Authorization": "Basic Z2VtaW5kZXg6eW91cl9zZWNyZXRfcGFzc3dvcmQ="
+      }
+    }
+  }
+}
+```
+
+### Testing MCP Server
+
+```bash
+# Initialize
+curl -X POST http://localhost:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0.0"},"capabilities":{}},"id":1}'
+
+# List Tools
+curl -X POST http://localhost:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":2}'
+
+# Call list_stores
+curl -X POST http://localhost:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_stores","arguments":{}},"id":3}'
+```
 
 ## Commit Convention
 

@@ -1,46 +1,45 @@
 {
-  "name": "@gemindex/cli",
-  "version": "1.2.1",
-  "description": "CLI for syncing files to Gemini File Search stores",
+  "name": "@gemindex/mcp",
+  "version": "1.0.0",
+  "description": "MCP stdio proxy CLI for GemIndex with OAuth2 Proxy support",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Ecube-Labs/gemindex.git",
-    "directory": "apps/cli"
+    "directory": "apps/mcp"
   },
   "bugs": {
     "url": "https://github.com/Ecube-Labs/gemindex/issues"
   },
-  "homepage": "https://github.com/ecubelabs/gemindex/tree/main/apps/cli#readme",
+  "homepage": "https://github.com/ecubelabs/gemindex/tree/main/apps/mcp#readme",
   "keywords": [
+    "mcp",
+    "gemindex",
     "gemini",
     "file-search",
-    "sync",
-    "cli"
+    "oauth",
+    "oauth2-proxy"
   ],
   "publishConfig": {
     "access": "public"
   },
   "files": [
-    "bin",
     "dist"
   ],
   "bin": {
-    "gemindex": "./bin/gemindex.js"
+    "gemindex-mcp": "./dist/index.js"
   },
+  "main": "./dist/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@henrygd/queue": "^1.0.1",
-    "commander": "^13.1.0",
-    "fast-glob": "^3.3.3",
-    "ora": "^8.1.1",
-    "picocolors": "^1.1.1",
-    "yaml": "^2.7.0"
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "playwright": "^1.50.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
@@ -53,13 +52,9 @@
   },
   "release": {
     "branches": [
-      "main",
-      {
-        "name": "develop",
-        "prerelease": "next"
-      }
+      "main"
     ],
-    "tagFormat": "cli-v${version}",
+    "tagFormat": "mcp-v${version}",
     "plugins": [
       [
         "@semantic-release/commit-analyzer",
@@ -144,7 +139,7 @@
             "package.json",
             "CHANGELOG.md"
           ],
-          "message": "chore(release): cli ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+          "message": "chore(release): mcp ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
         }
       ],
       [
@@ -156,6 +151,5 @@
         }
       ]
     ]
-  },
-  "stableVersion": "1.1.0"
+  }
 }

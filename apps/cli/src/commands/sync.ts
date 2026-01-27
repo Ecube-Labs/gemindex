@@ -5,7 +5,7 @@ import path from 'path';
 import { loadConfig, ConfigError } from '../lib/config.js';
 import { scanFiles } from '../lib/file-scanner.js';
 import { computeHashes } from '../lib/hasher.js';
-import { ApiClient } from '../lib/api-client.js';
+import { ApiClient, ApiConnectionError } from '../lib/api-client.js';
 import { buildSyncPlan } from '../lib/sync-engine.js';
 import { executeUploads, executeDeletes } from '../lib/uploader.js';
 import {
@@ -187,6 +187,11 @@ export const syncCommand = new Command('sync')
       if (error instanceof ConfigError) {
         console.error(pc.red(`\nConfig error: ${error.message}`));
         process.exit(2);
+      }
+
+      if (error instanceof ApiConnectionError) {
+        console.error(pc.red(`\n${error.message}`));
+        process.exit(1);
       }
 
       console.error(pc.red(`\nError: ${error instanceof Error ? error.message : 'Unknown error'}`));
