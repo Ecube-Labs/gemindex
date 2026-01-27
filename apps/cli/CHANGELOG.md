@@ -1,3 +1,19 @@
+## 1.3.0 (2026-01-27)
+
+* feat: add preserve patterns for remote-only files in sync configuration ([665463e](https://github.com/Ecube-Labs/gemindex/commit/665463e))
+* feat(api): add Remote MCP Server support ([adca074](https://github.com/Ecube-Labs/gemindex/commit/adca074))
+* feat(mcp): add support for Remote MCP Server and OAuth discovery endpoints ([b1e6322](https://github.com/Ecube-Labs/gemindex/commit/b1e6322))
+* feat(mcp): implement MCP stdio proxy CLI with OAuth2 support and cookie management ([b4b7cd2](https://github.com/Ecube-Labs/gemindex/commit/b4b7cd2))
+* Merge pull request #10 from Ecube-Labs/fix-pagination ([a53750e](https://github.com/Ecube-Labs/gemindex/commit/a53750e)), closes [#10](https://github.com/Ecube-Labs/gemindex/issues/10)
+* Merge pull request #4 from Ecube-Labs/dependabot/npm_and_yarn/qs-6.14.1 ([d96b821](https://github.com/Ecube-Labs/gemindex/commit/d96b821)), closes [#4](https://github.com/Ecube-Labs/gemindex/issues/4)
+* Merge pull request #5 from Ecube-Labs/support-remote-mcp ([a82452a](https://github.com/Ecube-Labs/gemindex/commit/a82452a)), closes [#5](https://github.com/Ecube-Labs/gemindex/issues/5)
+* Merge pull request #6 from Ecube-Labs/support-remote-mcp ([40f4d44](https://github.com/Ecube-Labs/gemindex/commit/40f4d44)), closes [#6](https://github.com/Ecube-Labs/gemindex/issues/6)
+* fix: fetch all pages when listing files from Gemini API ([ae64512](https://github.com/Ecube-Labs/gemindex/commit/ae64512))
+* fix: update favicon link and add favicon.ico file ([3dac011](https://github.com/Ecube-Labs/gemindex/commit/3dac011))
+* docs: add MCP architecture documentation with Mermaid diagrams ([303bb46](https://github.com/Ecube-Labs/gemindex/commit/303bb46))
+* chore(release): mcp 1.0.0 [skip ci] ([3c27ba3](https://github.com/Ecube-Labs/gemindex/commit/3c27ba3))
+* build(deps): bump qs from 6.14.0 to 6.14.1 ([1a8a8ca](https://github.com/Ecube-Labs/gemindex/commit/1a8a8ca))
+
 ## <small>1.2.1 (2025-12-29)</small>
 
 * fix: improve error message for API connection failures ([8b3ab9c](https://github.com/Ecube-Labs/gemindex/commit/8b3ab9c))
