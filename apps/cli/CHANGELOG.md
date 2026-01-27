@@ -1,3 +1,7 @@
+## 1.4.0 (2026-01-27)
+
+* feat: add support for custom metadata in file uploads and scanning ([b141d49](https://github.com/Ecube-Labs/gemindex/commit/b141d49))
+
 ## 1.3.0 (2026-01-27)
 
 * feat: add preserve patterns for remote-only files in sync configuration ([665463e](https://github.com/Ecube-Labs/gemindex/commit/665463e))
