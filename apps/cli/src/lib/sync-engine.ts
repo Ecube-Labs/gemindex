@@ -1,3 +1,4 @@
+import picomatch from 'picomatch';
 import type { LocalFile, RemoteFile, SyncPlan } from '../types/index.js';
 
 /**
@@ -15,7 +16,8 @@ export function buildSyncPlan(
   localFiles: LocalFile[],
   localHashes: Map<string, string>,
   remoteFiles: RemoteFile[],
-  deleteRemote: boolean
+  deleteRemote: boolean,
+  preservePatterns: string[] = []
 ): SyncPlan {
   const plan: SyncPlan = {
     uploads: [],
@@ -77,12 +79,23 @@ export function buildSyncPlan(
 
   // Remaining remote files are orphans
   if (deleteRemote) {
-    for (const [, remote] of remoteByName) {
-      plan.deletes.push({
-        type: 'delete',
-        remoteFile: remote,
-        reason: 'not in local',
-      });
+    // Create matcher for preserve patterns
+    const shouldPreserve = preservePatterns.length > 0 ? picomatch(preservePatterns) : () => false;
+
+    for (const [fileName, remote] of remoteByName) {
+      if (shouldPreserve(fileName)) {
+        plan.skips.push({
+          type: 'skip',
+          remoteFile: remote,
+          reason: 'preserved',
+        });
+      } else {
+        plan.deletes.push({
+          type: 'delete',
+          remoteFile: remote,
+          reason: 'not in local',
+        });
+      }
     }
   }
 

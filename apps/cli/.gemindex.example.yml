@@ -19,6 +19,9 @@ collect:
 sync:
   delete: false      # Set to true to delete remote files not in local
   concurrency: 8     # Parallel upload limit
+  preserve:         # Patterns for remote-only files to skip deletion (glob patterns)
+    - "*.md"
+    - "haulla_com_goatscript_*"
 
 # API settings
 api:

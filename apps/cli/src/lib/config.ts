@@ -18,6 +18,7 @@ const DEFAULT_CONFIG: Partial<GemindexConfig> = {
   },
   sync: {
     delete: false,
+    preserve: [],
     concurrency: 8,
   },
   api: {
@@ -74,6 +75,7 @@ export function loadConfig(configPath: string): GemindexConfig {
     },
     sync: {
       delete: parsed.sync?.delete ?? DEFAULT_CONFIG.sync!.delete!,
+      preserve: parsed.sync?.preserve ?? DEFAULT_CONFIG.sync!.preserve!,
       concurrency: parsed.sync?.concurrency ?? DEFAULT_CONFIG.sync!.concurrency!,
     },
     api: {

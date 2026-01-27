@@ -36,6 +36,7 @@ export interface GemindexConfig {
   };
   sync?: {
     delete?: boolean;
+    preserve?: string[]; // Patterns to preserve (skip deletion) for remote-only files
     concurrency?: number;
   };
   api?: {

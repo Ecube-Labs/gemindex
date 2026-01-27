@@ -45,6 +45,7 @@ export const syncCommand = new Command('sync')
       const config = loadConfig(configPath);
       const storeName = options.store || config.store;
       const deleteRemote = options.delete ?? config.sync?.delete ?? false;
+      const preservePatterns = config.sync?.preserve ?? [];
       const concurrency = parseInt(options.concurrency) || config.sync?.concurrency || 8;
       spinner.succeed(`Config loaded (store: ${pc.cyan(storeName)})`);
 
@@ -81,7 +82,13 @@ export const syncCommand = new Command('sync')
       graceful.checkAborted();
 
       // 6. Build sync plan
-      const plan = buildSyncPlan(localFiles, localHashes, remoteFiles, deleteRemote);
+      const plan = buildSyncPlan(
+        localFiles,
+        localHashes,
+        remoteFiles,
+        deleteRemote,
+        preservePatterns
+      );
       console.log();
       console.log(formatSyncPlan(plan));
 
