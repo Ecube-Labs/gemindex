@@ -63,7 +63,8 @@ async function uploadWithRetry(
         storeName,
         action.localFile.absolutePath,
         displayName,
-        signal
+        signal,
+        action.localFile.metadata
       );
 
       if (result.success) {

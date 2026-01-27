@@ -59,10 +59,16 @@ export const syncCommand = new Command('sync')
         token,
       });
 
-      // 3. Scan local files
+      // 3. Scan local files (with optional metadata loading)
       spinner = ora('Scanning local files...').start();
       const baseDir = path.dirname(configPath);
-      const localFiles = await scanFiles(baseDir, config.collect.include, config.collect.exclude);
+      const enableMetadata = config.collect.metadata ?? true;
+      const localFiles = await scanFiles(
+        baseDir,
+        config.collect.include,
+        config.collect.exclude,
+        enableMetadata
+      );
       spinner.succeed(`Found ${pc.cyan(String(localFiles.length))} local file(s)`);
 
       graceful.checkAborted();

@@ -163,6 +163,7 @@ export async function listFiles(storeName: string): Promise<FileSearchStoreFile[
 
 export interface UploadConfig {
   displayName?: string;
+  customMetadata?: Record<string, string | number>;
 }
 
 export async function uploadFile(
@@ -250,16 +251,40 @@ export async function uploadFile(
   // Step 3: Import file to store using :importFile endpoint with custom metadata
   const importUrl = `${GEMINI_API_BASE}/${name}:importFile?key=${apiKey}`;
 
+  // Build metadata array: user metadata first, then system metadata (which takes precedence)
+  const reservedKeys = new Set(['originalFileName', 'uploadedAt', 'sha256']);
+  const metadataEntries: Array<{ key: string; string_value?: string; numeric_value?: number }> = [];
+
+  // Add user-provided metadata (excluding reserved keys)
+  if (config?.customMetadata) {
+    for (const [key, value] of Object.entries(config.customMetadata)) {
+      if (reservedKeys.has(key)) {
+        console.warn(
+          `Warning: Skipping reserved metadata key "${key}" - system value will be used`
+        );
+        continue;
+      }
+      if (typeof value === 'string') {
+        metadataEntries.push({ key, string_value: value });
+      } else if (typeof value === 'number') {
+        metadataEntries.push({ key, numeric_value: value });
+      }
+    }
+  }
+
+  // Add system metadata (always included, takes precedence)
+  metadataEntries.push(
+    { key: 'originalFileName', string_value: displayName },
+    { key: 'uploadedAt', string_value: new Date().toISOString() },
+    { key: 'sha256', string_value: fileHash }
+  );
+
   const importResponse = await fetch(importUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       file_name: uploadedFile.file.name,
-      custom_metadata: [
-        { key: 'originalFileName', string_value: displayName },
-        { key: 'uploadedAt', string_value: new Date().toISOString() },
-        { key: 'sha256', string_value: fileHash },
-      ],
+      custom_metadata: metadataEntries,
     }),
   });
 

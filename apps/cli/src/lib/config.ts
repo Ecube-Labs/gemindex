@@ -15,6 +15,7 @@ const DEFAULT_CONFIG: Partial<GemindexConfig> = {
   collect: {
     include: [],
     exclude: [],
+    metadata: true,
   },
   sync: {
     delete: false,
@@ -72,6 +73,7 @@ export function loadConfig(configPath: string): GemindexConfig {
     collect: {
       include: parsed.collect.include,
       exclude: parsed.collect.exclude ?? DEFAULT_CONFIG.collect!.exclude!,
+      metadata: parsed.collect.metadata ?? DEFAULT_CONFIG.collect!.metadata!,
     },
     sync: {
       delete: parsed.sync?.delete ?? DEFAULT_CONFIG.sync!.delete!,

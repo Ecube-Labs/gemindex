@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { RemoteFile } from '../types/index.js';
+import type { RemoteFile, CustomMetadata } from '../types/index.js';
 
 export interface ApiClientConfig {
   endpoint: string;
@@ -116,7 +116,8 @@ export class ApiClient {
     storeName: string,
     filePath: string,
     displayName: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    metadata?: CustomMetadata
   ): Promise<{ success: boolean; error?: string }> {
     // Read file as buffer and create Blob
     const fileBuffer = await fs.readFile(filePath);
@@ -126,6 +127,11 @@ export class ApiClient {
     const form = new FormData();
     const blob = new Blob([fileBuffer]);
     form.append('file', blob, fileName);
+
+    // Add metadata as JSON if provided
+    if (metadata && Object.keys(metadata).length > 0) {
+      form.append('metadata', JSON.stringify(metadata));
+    }
 
     const headers: Record<string, string> = {};
     if (this.headers['Authorization']) {

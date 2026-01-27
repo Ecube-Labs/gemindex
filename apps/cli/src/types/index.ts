@@ -1,9 +1,14 @@
 // CLI Types
 
+// Metadata types (Gemini API only supports string/number)
+export type CustomMetadataValue = string | number;
+export type CustomMetadata = Record<string, CustomMetadataValue>;
+
 export interface LocalFile {
   relativePath: string; // Used as originalFileName for sync
   absolutePath: string;
   size: number;
+  metadata?: CustomMetadata; // Custom metadata from .metadata.json file
 }
 
 export interface RemoteFile {
@@ -33,6 +38,7 @@ export interface GemindexConfig {
   collect: {
     include: string[];
     exclude?: string[];
+    metadata?: boolean; // Enable metadata file processing (default: true)
   };
   sync?: {
     delete?: boolean;
