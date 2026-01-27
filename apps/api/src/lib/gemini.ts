@@ -388,6 +388,14 @@ export interface GroundingChunk {
   title: string;
   text: string;
   fileSearchStore: string;
+
+  // Additional metadata fields
+  documentName?: string; // Document resource name (for API links)
+  displayName?: string; // Gemini-assigned displayName (for debugging)
+  mimeType?: string; // File MIME type
+  uploadedAt?: string; // Upload timestamp
+  createTime?: string; // Document creation time
+  sourceUrl?: string; // Original URL (if provided during upload)
 }
 
 export interface GroundingSupport {
@@ -413,12 +421,33 @@ export async function search(
     ? storeName
     : `fileSearchStores/${storeName}`;
 
-  // Get file list to map file IDs to original display names
+  // Get file list to map file IDs to full metadata
   const files = await listFiles(storeName);
-  const fileIdToName = new Map<string, string>();
+
+  interface FileMetadata {
+    documentName: string;
+    originalDisplayName: string;
+    displayName: string;
+    mimeType?: string;
+    uploadedAt?: string;
+    createTime?: string;
+    sourceUrl?: string;
+  }
+
+  const fileMetadataMap = new Map<string, FileMetadata>();
   files.forEach((f) => {
-    if (f.displayName && f.originalDisplayName) {
-      fileIdToName.set(f.displayName, f.originalDisplayName);
+    if (f.displayName) {
+      const uploadedAtMeta = f.customMetadata?.find((m) => m.key === 'uploadedAt');
+      const sourceUrlMeta = f.customMetadata?.find((m) => m.key === 'sourceUrl');
+      fileMetadataMap.set(f.displayName, {
+        documentName: f.name,
+        originalDisplayName: f.originalDisplayName || f.displayName,
+        displayName: f.displayName,
+        mimeType: f.mimeType,
+        uploadedAt: uploadedAtMeta?.stringValue,
+        createTime: f.createTime,
+        sourceUrl: sourceUrlMeta?.stringValue,
+      });
     }
   });
 
@@ -487,17 +516,26 @@ export async function search(
   const candidate = response.candidates?.[0];
   const text = candidate?.content?.parts?.map((p) => p.text).join('') ?? '';
 
-  // Extract grounding chunks as sources with original file names
+  // Extract grounding chunks as sources with full metadata
   const sources: GroundingChunk[] =
     candidate?.groundingMetadata?.groundingChunks
       ?.map((chunk) => chunk.retrievedContext)
       .filter((ctx): ctx is NonNullable<typeof ctx> => !!ctx)
-      .map((ctx) => ({
-        // Map file ID to original display name
-        title: (ctx.title && fileIdToName.get(ctx.title)) || ctx.title || 'Unknown',
-        text: ctx.text ?? '',
-        fileSearchStore: ctx.fileSearchStore ?? '',
-      })) ?? [];
+      .map((ctx) => {
+        const metadata = ctx.title ? fileMetadataMap.get(ctx.title) : undefined;
+        return {
+          // Map file ID to original display name
+          title: metadata?.originalDisplayName || ctx.title || 'Unknown',
+          text: ctx.text ?? '',
+          fileSearchStore: ctx.fileSearchStore ?? '',
+          documentName: metadata?.documentName,
+          displayName: ctx.title,
+          mimeType: metadata?.mimeType,
+          uploadedAt: metadata?.uploadedAt,
+          createTime: metadata?.createTime,
+          sourceUrl: metadata?.sourceUrl,
+        };
+      }) ?? [];
 
   // Extract grounding supports for inline citations
   const supports: GroundingSupport[] =

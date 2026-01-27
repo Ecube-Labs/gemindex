@@ -109,6 +109,14 @@ export interface GroundingSource {
   title: string;
   text: string;
   fileSearchStore: string;
+
+  // Additional metadata fields
+  documentName?: string; // Document resource name (for API links)
+  displayName?: string; // Gemini-assigned displayName (for debugging)
+  mimeType?: string; // File MIME type
+  uploadedAt?: string; // Upload timestamp
+  createTime?: string; // Document creation time
+  sourceUrl?: string; // Original URL (if provided during upload)
 }
 
 export interface GroundingSupport {
