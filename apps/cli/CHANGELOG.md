@@ -1,3 +1,15 @@
+## 1.5.0-next.1 (2026-07-10)
+
+* Merge branch 'fix-pagination' into develop ([647b49b](https://github.com/Ecube-Labs/gemindex/commit/647b49b))
+* Merge branch 'hotfix/gemini-model-update' into develop ([d0d74da](https://github.com/Ecube-Labs/gemindex/commit/d0d74da))
+* Merge branch 'improve-file-names' into develop ([572cb99](https://github.com/Ecube-Labs/gemindex/commit/572cb99))
+* Merge branch 'improve-file-names' into develop ([b7204ff](https://github.com/Ecube-Labs/gemindex/commit/b7204ff))
+* feat: gemini 모델을 3.5-flash로 업데이트 ([196f137](https://github.com/Ecube-Labs/gemindex/commit/196f137))
+* feat: 추가 메타데이터 필드 및 검색 결과에 대한 메타데이터 매핑 개선 ([358db0f](https://github.com/Ecube-Labs/gemindex/commit/358db0f))
+* chore(release): cli 1.2.0-next.1 [skip ci] ([3101305](https://github.com/Ecube-Labs/gemindex/commit/3101305))
+* chore(release): cli 1.2.0-next.2 [skip ci] ([50529db](https://github.com/Ecube-Labs/gemindex/commit/50529db))
+* chore(release): cli 1.3.0-next.1 [skip ci] ([e2e2633](https://github.com/Ecube-Labs/gemindex/commit/e2e2633))
+
 ## 1.4.0 (2026-01-27)
 
 - feat: add support for custom metadata in file uploads and scanning ([b141d49](https://github.com/Ecube-Labs/gemindex/commit/b141d49))
