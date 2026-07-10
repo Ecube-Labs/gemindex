@@ -21,7 +21,7 @@ export function registerSearchTool(server: McpServer): void {
           .string()
           .optional()
           .describe('Optional system prompt to guide the search response'),
-        model: z.string().optional().describe('Gemini model to use (default: gemini-2.5-flash)'),
+        model: z.string().optional().describe('Gemini model to use (default: gemini-3.5-flash)'),
         temperature: z
           .number()
           .min(0)
@@ -43,9 +43,14 @@ export function registerSearchTool(server: McpServer): void {
         // 구조화된 응답
         const response = {
           answer: result.text,
-          sources: result.sources.map((s) => ({
+          sources: result.sources.map((s, index) => ({
+            index,
             title: s.title,
             excerpt: s.text.slice(0, 500) + (s.text.length > 500 ? '...' : ''),
+            documentName: s.documentName,
+            mimeType: s.mimeType,
+            uploadedAt: s.uploadedAt,
+            sourceUrl: s.sourceUrl,
           })),
           citations: result.supports.map((s) => ({
             text: s.text,

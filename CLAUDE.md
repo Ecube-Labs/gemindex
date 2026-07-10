@@ -107,7 +107,7 @@ MCP_AUTH_PASSWORD=
 - API Base: `https://generativelanguage.googleapis.com/v1beta`
 - Store name format: `fileSearchStores/{id}`
 - File upload: Uses resumable upload (`X-Goog-Upload-Protocol: resumable`)
-- Search model: `gemini-2.5-flash` (default)
+- Search model: `gemini-3.5-flash` (default)
 
 ## Commit Convention
 

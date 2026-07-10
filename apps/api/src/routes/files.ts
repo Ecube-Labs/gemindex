@@ -44,6 +44,17 @@ router.post('/:storeName/files', upload.single('file'), async (ctx) => {
       }
     }
 
+    // Parse metadata from form data
+    const metadataStr = body?.metadata;
+    if (metadataStr && typeof metadataStr === 'string') {
+      try {
+        const customMetadata = JSON.parse(metadataStr) as Record<string, string | number>;
+        config = { ...config, customMetadata };
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
     // Use original filename as display name if not provided
     if (!config?.displayName && file.originalname) {
       config = { ...config, displayName: file.originalname };

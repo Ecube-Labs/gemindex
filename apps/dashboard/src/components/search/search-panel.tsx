@@ -12,6 +12,7 @@ import {
   Keyboard,
   Sparkles,
   BookmarkPlus,
+  ExternalLink,
 } from 'lucide-react';
 import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -112,8 +113,24 @@ function SourceCard({
               {source.title}
               {!isCited && <span className="text-xs text-muted-foreground ml-2">(not cited)</span>}
             </CardTitle>
-            {!isExpanded && (
+            {source.sourceUrl && (
+              <a
+                href={source.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+                aria-label={`Open source: ${source.sourceUrl}`}
+              >
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="truncate max-w-[200px]">{source.sourceUrl}</span>
+              </a>
+            )}
+            {!isExpanded && !source.sourceUrl && (
               <CardDescription className="text-xs mt-1 line-clamp-2">{preview}</CardDescription>
+            )}
+            {!isExpanded && source.sourceUrl && (
+              <CardDescription className="text-xs mt-1 line-clamp-1">{preview}</CardDescription>
             )}
           </div>
           <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />

@@ -19,10 +19,14 @@ export function formatSyncPlan(plan: SyncPlan): string {
 
   // Uploads
   if (plan.uploads.length > 0) {
-    lines.push(`  ${pc.green(`${plan.uploads.length} file(s) to upload:`)}`);
+    // Count files with metadata
+    const withMetadata = plan.uploads.filter((a) => a.localFile?.metadata).length;
+    const metadataInfo = withMetadata > 0 ? ` (${withMetadata} with metadata)` : '';
+    lines.push(`  ${pc.green(`${plan.uploads.length} file(s) to upload:${metadataInfo}`)}`);
     for (const action of plan.uploads) {
       const file = action.localFile?.relativePath || 'unknown';
-      lines.push(`    ${pc.green('+')} ${file} (${action.reason})`);
+      const metaTag = action.localFile?.metadata ? pc.cyan(' [meta]') : '';
+      lines.push(`    ${pc.green('+')} ${file}${metaTag} (${action.reason})`);
     }
   }
 

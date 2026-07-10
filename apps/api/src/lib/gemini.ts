@@ -163,6 +163,7 @@ export async function listFiles(storeName: string): Promise<FileSearchStoreFile[
 
 export interface UploadConfig {
   displayName?: string;
+  customMetadata?: Record<string, string | number>;
 }
 
 export async function uploadFile(
@@ -250,16 +251,40 @@ export async function uploadFile(
   // Step 3: Import file to store using :importFile endpoint with custom metadata
   const importUrl = `${GEMINI_API_BASE}/${name}:importFile?key=${apiKey}`;
 
+  // Build metadata array: user metadata first, then system metadata (which takes precedence)
+  const reservedKeys = new Set(['originalFileName', 'uploadedAt', 'sha256']);
+  const metadataEntries: Array<{ key: string; string_value?: string; numeric_value?: number }> = [];
+
+  // Add user-provided metadata (excluding reserved keys)
+  if (config?.customMetadata) {
+    for (const [key, value] of Object.entries(config.customMetadata)) {
+      if (reservedKeys.has(key)) {
+        console.warn(
+          `Warning: Skipping reserved metadata key "${key}" - system value will be used`
+        );
+        continue;
+      }
+      if (typeof value === 'string') {
+        metadataEntries.push({ key, string_value: value });
+      } else if (typeof value === 'number') {
+        metadataEntries.push({ key, numeric_value: value });
+      }
+    }
+  }
+
+  // Add system metadata (always included, takes precedence)
+  metadataEntries.push(
+    { key: 'originalFileName', string_value: displayName },
+    { key: 'uploadedAt', string_value: new Date().toISOString() },
+    { key: 'sha256', string_value: fileHash }
+  );
+
   const importResponse = await fetch(importUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       file_name: uploadedFile.file.name,
-      custom_metadata: [
-        { key: 'originalFileName', string_value: displayName },
-        { key: 'uploadedAt', string_value: new Date().toISOString() },
-        { key: 'sha256', string_value: fileHash },
-      ],
+      custom_metadata: metadataEntries,
     }),
   });
 
@@ -363,6 +388,14 @@ export interface GroundingChunk {
   title: string;
   text: string;
   fileSearchStore: string;
+
+  // Additional metadata fields
+  documentName?: string; // Document resource name (for API links)
+  displayName?: string; // Gemini-assigned displayName (for debugging)
+  mimeType?: string; // File MIME type
+  uploadedAt?: string; // Upload timestamp
+  createTime?: string; // Document creation time
+  sourceUrl?: string; // Original URL (if provided during upload)
 }
 
 export interface GroundingSupport {
@@ -383,17 +416,38 @@ export async function search(
   query: string,
   config?: SearchConfig
 ): Promise<SearchResult> {
-  const model = config?.model ?? 'gemini-2.5-flash';
+  const model = config?.model ?? 'gemini-3.5-flash';
   const name = storeName.startsWith('fileSearchStores/')
     ? storeName
     : `fileSearchStores/${storeName}`;
 
-  // Get file list to map file IDs to original display names
+  // Get file list to map file IDs to full metadata
   const files = await listFiles(storeName);
-  const fileIdToName = new Map<string, string>();
+
+  interface FileMetadata {
+    documentName: string;
+    originalDisplayName: string;
+    displayName: string;
+    mimeType?: string;
+    uploadedAt?: string;
+    createTime?: string;
+    sourceUrl?: string;
+  }
+
+  const fileMetadataMap = new Map<string, FileMetadata>();
   files.forEach((f) => {
-    if (f.displayName && f.originalDisplayName) {
-      fileIdToName.set(f.displayName, f.originalDisplayName);
+    if (f.displayName) {
+      const uploadedAtMeta = f.customMetadata?.find((m) => m.key === 'uploadedAt');
+      const sourceUrlMeta = f.customMetadata?.find((m) => m.key === 'sourceUrl');
+      fileMetadataMap.set(f.displayName, {
+        documentName: f.name,
+        originalDisplayName: f.originalDisplayName || f.displayName,
+        displayName: f.displayName,
+        mimeType: f.mimeType,
+        uploadedAt: uploadedAtMeta?.stringValue,
+        createTime: f.createTime,
+        sourceUrl: sourceUrlMeta?.stringValue,
+      });
     }
   });
 
@@ -462,17 +516,26 @@ export async function search(
   const candidate = response.candidates?.[0];
   const text = candidate?.content?.parts?.map((p) => p.text).join('') ?? '';
 
-  // Extract grounding chunks as sources with original file names
+  // Extract grounding chunks as sources with full metadata
   const sources: GroundingChunk[] =
     candidate?.groundingMetadata?.groundingChunks
       ?.map((chunk) => chunk.retrievedContext)
       .filter((ctx): ctx is NonNullable<typeof ctx> => !!ctx)
-      .map((ctx) => ({
-        // Map file ID to original display name
-        title: (ctx.title && fileIdToName.get(ctx.title)) || ctx.title || 'Unknown',
-        text: ctx.text ?? '',
-        fileSearchStore: ctx.fileSearchStore ?? '',
-      })) ?? [];
+      .map((ctx) => {
+        const metadata = ctx.title ? fileMetadataMap.get(ctx.title) : undefined;
+        return {
+          // Map file ID to original display name
+          title: metadata?.originalDisplayName || ctx.title || 'Unknown',
+          text: ctx.text ?? '',
+          fileSearchStore: ctx.fileSearchStore ?? '',
+          documentName: metadata?.documentName,
+          displayName: ctx.title,
+          mimeType: metadata?.mimeType,
+          uploadedAt: metadata?.uploadedAt,
+          createTime: metadata?.createTime,
+          sourceUrl: metadata?.sourceUrl,
+        };
+      }) ?? [];
 
   // Extract grounding supports for inline citations
   const supports: GroundingSupport[] =
