@@ -416,7 +416,7 @@ export async function search(
   query: string,
   config?: SearchConfig
 ): Promise<SearchResult> {
-  const model = config?.model ?? 'gemini-2.5-flash';
+  const model = config?.model ?? 'gemini-3.5-flash';
   const name = storeName.startsWith('fileSearchStores/')
     ? storeName
     : `fileSearchStores/${storeName}`;
