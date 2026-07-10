@@ -21,7 +21,7 @@ export function registerSearchTool(server: McpServer): void {
           .string()
           .optional()
           .describe('Optional system prompt to guide the search response'),
-        model: z.string().optional().describe('Gemini model to use (default: gemini-2.5-flash)'),
+        model: z.string().optional().describe('Gemini model to use (default: gemini-3.5-flash)'),
         temperature: z
           .number()
           .min(0)
