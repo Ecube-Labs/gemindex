@@ -21,7 +21,10 @@ export function registerSearchTool(server: McpServer): void {
           .string()
           .optional()
           .describe('Optional system prompt to guide the search response'),
-        model: z.string().optional().describe('Gemini model to use (default: gemini-3.5-flash)'),
+        model: z
+          .string()
+          .optional()
+          .describe(`Gemini model to use (default: ${gemini.DEFAULT_SEARCH_MODEL})`),
         temperature: z
           .number()
           .min(0)
@@ -29,15 +32,30 @@ export function registerSearchTool(server: McpServer): void {
           .optional()
           .describe('Response randomness (0-2, default: model default)'),
         maxOutputTokens: z.number().optional().describe('Maximum tokens in response'),
+        thinkingLevel: z
+          .enum(gemini.THINKING_LEVELS)
+          .optional()
+          .describe(
+            'Thinking level (default: MINIMAL on models that support it, e.g. gemini-3.6-flash; gemini-3.7/3.8-flash do not support MINIMAL)'
+          ),
       },
     },
-    async ({ storeName, query, systemPrompt, model, temperature, maxOutputTokens }) => {
+    async ({
+      storeName,
+      query,
+      systemPrompt,
+      model,
+      temperature,
+      maxOutputTokens,
+      thinkingLevel,
+    }) => {
       try {
         const result = await gemini.search(storeName, query, {
           systemPrompt,
           model,
           temperature,
           maxOutputTokens,
+          thinkingLevel,
         });
 
         // 구조화된 응답

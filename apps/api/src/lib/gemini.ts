@@ -438,6 +438,21 @@ export interface SearchConfig {
   topP?: number;
   topK?: number;
   maxOutputTokens?: number;
+  /** Gemini 3+ thinking level. Defaults to MINIMAL on models that support it. */
+  thinkingLevel?: ThinkingLevel;
+}
+
+export const THINKING_LEVELS = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+// MINIMAL cut File Search TTFT ~40% on 3.6-flash (14.0s -> 8.5s) with no measurable quality
+// loss in blind eval. gemini-3.7/3.8-flash reject MINIMAL (HTTP 400), and 2.x models use
+// thinkingBudget instead, so the default only applies to models verified to accept it.
+const MINIMAL_THINKING_MODELS =
+  /^gemini-3\.[56]-flash(-lite)?$|^gemini-3\.1-flash-lite$|^gemini-flash-lite-latest$/;
+
+function defaultThinkingLevel(model: string): ThinkingLevel | undefined {
+  return MINIMAL_THINKING_MODELS.test(model) ? 'MINIMAL' : undefined;
 }
 
 export interface GroundingChunk {
@@ -467,12 +482,15 @@ export interface SearchResult {
   supports: GroundingSupport[];
 }
 
+// Quality over speed: flash beat flash-lite in blind eval (9/12 wins) at ~2x the latency
+export const DEFAULT_SEARCH_MODEL = 'gemini-3.6-flash';
+
 export async function search(
   storeName: string,
   query: string,
   config?: SearchConfig
 ): Promise<SearchResult> {
-  const model = config?.model ?? 'gemini-3.5-flash';
+  const model = config?.model ?? DEFAULT_SEARCH_MODEL;
   const name = storeName.startsWith('fileSearchStores/')
     ? storeName
     : `fileSearchStores/${storeName}`;
@@ -515,6 +533,8 @@ export async function search(
   if (config?.topK !== undefined) generationConfig.topK = config.topK;
   if (config?.maxOutputTokens !== undefined)
     generationConfig.maxOutputTokens = config.maxOutputTokens;
+  const thinkingLevel = config?.thinkingLevel ?? defaultThinkingLevel(model);
+  if (thinkingLevel) generationConfig.thinkingConfig = { thinkingLevel };
 
   const requestBody: Record<string, unknown> = {
     contents,
