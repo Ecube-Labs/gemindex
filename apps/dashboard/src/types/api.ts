@@ -92,7 +92,12 @@ export interface SearchRequest {
   topP?: number;
   topK?: number;
   maxOutputTokens?: number;
+  thinkingLevel?: ThinkingLevel;
 }
+
+// Mirrors THINKING_LEVELS in apps/api/src/lib/gemini.ts (validated server-side)
+export const THINKING_LEVELS = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export interface SearchPreset {
   id: string;
@@ -103,6 +108,7 @@ export interface SearchPreset {
   topP: number;
   topK: number;
   maxOutputTokens: number;
+  thinkingLevel?: ThinkingLevel; // undefined = server default (MINIMAL where supported)
 }
 
 export interface GroundingSource {

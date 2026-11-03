@@ -117,7 +117,8 @@ export class ApiClient {
     filePath: string,
     displayName: string,
     signal?: AbortSignal,
-    metadata?: CustomMetadata
+    metadata?: CustomMetadata,
+    replaceDocuments?: string[]
   ): Promise<{ success: boolean; error?: string }> {
     // Read file as buffer and create Blob
     const fileBuffer = await fs.readFile(filePath);
@@ -131,6 +132,11 @@ export class ApiClient {
     // Add metadata as JSON if provided
     if (metadata && Object.keys(metadata).length > 0) {
       form.append('metadata', JSON.stringify(metadata));
+    }
+
+    // Tell the server which documents this upload replaces so it can skip scanning the store
+    if (replaceDocuments) {
+      form.append('replaceDocuments', JSON.stringify(replaceDocuments));
     }
 
     const headers: Record<string, string> = {};

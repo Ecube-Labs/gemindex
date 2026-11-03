@@ -64,7 +64,11 @@ async function uploadWithRetry(
         action.localFile.absolutePath,
         displayName,
         signal,
-        action.localFile.metadata
+        action.localFile.metadata,
+        // First attempt: replace the documents the sync plan resolved, skipping a server-side
+        // store scan. Retries omit it so the server rescans and also removes any document a
+        // partially failed attempt may have created (the plan's names may be stale by then).
+        attempt === 0 ? (action.replaceRemoteFiles ?? []).map((f) => f.name) : undefined
       );
 
       if (result.success) {
