@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { SearchPreset, ThinkingLevel } from '@/types/api';
+import { THINKING_LEVELS, type SearchPreset, type ThinkingLevel } from '@/types/api';
+
+export { THINKING_LEVELS };
 
 const PRESETS_STORAGE_KEY = 'gemindex-search-presets';
 const LAST_SETTINGS_STORAGE_KEY = 'gemindex-last-search-settings';
@@ -15,7 +17,13 @@ export interface SearchSettings {
   thinkingLevel: ThinkingLevel | undefined;
 }
 
+// Mirrors DEFAULT_SEARCH_MODEL in apps/api/src/lib/gemini.ts
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
+
+// v2 stores the model only when customized. v1 (unversioned) always stored it, so a v1 value
+// equal to an earlier default was most likely never chosen and is treated as "default".
+const SETTINGS_VERSION = 2;
+const LEGACY_DEFAULT_MODELS = new Set(['gemini-3.5-flash', 'gemini-2.0-flash']);
 
 const DEFAULT_SETTINGS: SearchSettings = {
   systemPrompt: '',
@@ -27,10 +35,8 @@ const DEFAULT_SETTINGS: SearchSettings = {
   thinkingLevel: undefined,
 };
 
-export const THINKING_LEVELS: ThinkingLevel[] = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'];
-
 export const AVAILABLE_MODELS = [
-  'gemini-3.6-flash',
+  DEFAULT_MODEL,
   'gemini-3.8-flash',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
@@ -55,7 +61,10 @@ function loadLastSettings(): SearchSettings {
   try {
     const stored = localStorage.getItem(LAST_SETTINGS_STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored);
+      const { v, ...parsed } = JSON.parse(stored) as Partial<SearchSettings> & { v?: number };
+      if (v !== SETTINGS_VERSION && parsed.model && LEGACY_DEFAULT_MODELS.has(parsed.model)) {
+        delete parsed.model;
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch {
@@ -65,7 +74,13 @@ function loadLastSettings(): SearchSettings {
 }
 
 function saveLastSettings(settings: SearchSettings): void {
-  localStorage.setItem(LAST_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  // Persist the model only when customized, so future default changes reach returning users
+  const { model, ...rest } = settings;
+  const toStore = model === DEFAULT_MODEL ? rest : settings;
+  localStorage.setItem(
+    LAST_SETTINGS_STORAGE_KEY,
+    JSON.stringify({ ...toStore, v: SETTINGS_VERSION })
+  );
 }
 
 export function useSearchPresets() {

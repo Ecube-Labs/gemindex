@@ -95,7 +95,9 @@ export interface SearchRequest {
   thinkingLevel?: ThinkingLevel;
 }
 
-export type ThinkingLevel = 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+// Mirrors THINKING_LEVELS in apps/api/src/lib/gemini.ts (validated server-side)
+export const THINKING_LEVELS = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export interface SearchPreset {
   id: string;

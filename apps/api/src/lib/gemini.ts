@@ -16,6 +16,20 @@ interface ApiError {
   error?: { message?: string };
 }
 
+export class GeminiApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'GeminiApiError';
+  }
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof GeminiApiError && error.status === 404;
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const apiKey = getApiKey();
   const url = `${GEMINI_API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}key=${apiKey}`;
@@ -32,7 +46,10 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
     const errorData = (await response
       .json()
       .catch(() => ({ error: { message: 'Unknown error' } }))) as ApiError;
-    throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+    throw new GeminiApiError(
+      errorData.error?.message || `HTTP ${response.status}`,
+      response.status
+    );
   }
 
   return response.json() as Promise<T>;
@@ -97,14 +114,16 @@ export async function createStore(displayName: string): Promise<FileSearchStore>
   });
 }
 
+function toStoreName(storeName: string): string {
+  return storeName.startsWith('fileSearchStores/') ? storeName : `fileSearchStores/${storeName}`;
+}
+
 export async function getStore(name: string): Promise<FileSearchStore> {
-  const storeName = name.startsWith('fileSearchStores/') ? name : `fileSearchStores/${name}`;
-  return fetchApi<FileSearchStore>(`/${storeName}`);
+  return fetchApi<FileSearchStore>(`/${toStoreName(name)}`);
 }
 
 export async function deleteStore(name: string, force = false): Promise<void> {
-  const storeName = name.startsWith('fileSearchStores/') ? name : `fileSearchStores/${name}`;
-  await fetchApi<unknown>(`/${storeName}${force ? '?force=true' : ''}`, {
+  await fetchApi<unknown>(`/${toStoreName(name)}${force ? '?force=true' : ''}`, {
     method: 'DELETE',
   });
 }
@@ -125,10 +144,6 @@ function getSha256(customMetadata?: CustomMetadata[]): string | undefined {
 
 // documents.list returns at most 10 per page by default; 20 is the documented maximum.
 const DOCUMENTS_PAGE_SIZE = 20;
-
-function toStoreName(storeName: string): string {
-  return storeName.startsWith('fileSearchStores/') ? storeName : `fileSearchStores/${storeName}`;
-}
 
 // File operations (documents in Gemini API terminology)
 // Throws on failure: callers must not mistake an API error for an empty store.
@@ -159,50 +174,114 @@ export async function listFiles(storeName: string): Promise<FileSearchStoreFile[
 }
 
 // Per-store document metadata cache for search source enrichment (documentName, createTime)
-// that grounding chunks do not carry. Concurrent misses share one in-flight listing.
+// that grounding chunks do not carry. Stale-while-revalidate: concurrent misses share one
+// in-flight listing, and the previous listing stays usable while a refresh runs.
 const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
-const metadataCache = new Map<
-  string,
-  {
-    expiresAt: number;
-    files: Promise<FileSearchStoreFile[]>;
-    resolved?: FileSearchStoreFile[];
-  }
->();
+// After an upload/delete, new documents may still be indexing, so listings fetched shortly
+// after a mutation expire quickly. This also caps refreshes to one per window during a sync.
+const METADATA_CACHE_TTL_AFTER_MUTATION_MS = 15 * 1000;
+const METADATA_MUTATION_WINDOW_MS = 2 * 60 * 1000;
+// A failed listing is not retried by every search; it backs off for this long.
+const METADATA_FAILURE_COOLDOWN_MS = 30 * 1000;
+// How long a search waits for an in-flight listing after generation before using stale data.
+const METADATA_WAIT_BUDGET_MS = 1000;
+
+interface MetadataCacheEntry {
+  expiresAt: number;
+  files: Promise<FileSearchStoreFile[]>;
+  /** Last successful listing (possibly stale), usable without waiting */
+  resolved?: FileSearchStoreFile[];
+}
+
+const metadataCache = new Map<string, MetadataCacheEntry>();
+const lastMutationAt = new Map<string, number>();
 
 function getCachedFiles(storeName: string): Promise<FileSearchStoreFile[]> {
   const key = toStoreName(storeName);
   const cached = metadataCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.files;
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) return cached.files;
 
+  const recentlyMutated = now - (lastMutationAt.get(key) ?? 0) < METADATA_MUTATION_WINDOW_MS;
   const files = listFiles(key);
-  const entry: { expiresAt: number; files: typeof files; resolved?: FileSearchStoreFile[] } = {
-    expiresAt: Date.now() + METADATA_CACHE_TTL_MS,
+  const entry: MetadataCacheEntry = {
+    expiresAt:
+      now + (recentlyMutated ? METADATA_CACHE_TTL_AFTER_MUTATION_MS : METADATA_CACHE_TTL_MS),
     files,
+    resolved: cached?.resolved,
   };
   metadataCache.set(key, entry);
   files.then(
     (resolved) => {
       entry.resolved = resolved;
     },
-    () => {
-      if (metadataCache.get(key) === entry) metadataCache.delete(key);
+    (error: unknown) => {
+      console.error('Failed to refresh document metadata cache:', error);
+      entry.expiresAt = Date.now() + METADATA_FAILURE_COOLDOWN_MS;
     }
   );
   return files;
 }
 
-// Non-blocking read: returns the cached listing if already loaded, otherwise starts a
-// background refresh and returns undefined so the caller never waits on an O(N) listing.
-function peekCachedFiles(storeName: string): FileSearchStoreFile[] | undefined {
-  getCachedFiles(storeName).catch((error: unknown) => {
-    console.error('Failed to refresh document metadata cache:', error);
-  });
-  return metadataCache.get(toStoreName(storeName))?.resolved;
+function invalidateMetadataCache(storeName: string): void {
+  const key = toStoreName(storeName);
+  const now = Date.now();
+  lastMutationAt.set(key, now);
+  // Debounced: expire soon rather than immediately, keeping the stale listing meanwhile
+  const entry = metadataCache.get(key);
+  if (entry) {
+    entry.expiresAt = Math.min(entry.expiresAt, now + METADATA_CACHE_TTL_AFTER_MUTATION_MS);
+  }
 }
 
-function invalidateMetadataCache(storeName: string): void {
-  metadataCache.delete(toStoreName(storeName));
+/** Resolves to the value, or undefined if it does not settle successfully within `ms`. */
+function settleWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(undefined);
+      }
+    );
+  });
+}
+
+// Deletes the given documents if they still exist and belong to this file. Names come from
+// the caller's earlier listing, so they may already be gone (404 is fine) — e.g. on a retry
+// after a partial failure — and are re-checked so a stray name cannot delete another file.
+async function deleteReplacedDocuments(
+  storeName: string,
+  displayName: string,
+  documentNames: string[]
+): Promise<void> {
+  await Promise.all(
+    documentNames.map(async (documentName) => {
+      const fullName = toDocumentName(storeName, documentName);
+      if (!fullName.startsWith(`${toStoreName(storeName)}/documents/`)) {
+        console.warn(`Skipping replace of ${fullName}: it belongs to another store`);
+        return;
+      }
+      let doc: FileSearchStoreFile;
+      try {
+        doc = await fetchApi<FileSearchStoreFile>(`/${fullName}`);
+      } catch (error) {
+        if (isNotFound(error)) return;
+        throw error;
+      }
+      if (getOriginalFileName(doc.customMetadata) !== displayName) {
+        console.warn(`Skipping replace of ${fullName}: it is not a version of "${displayName}"`);
+        return;
+      }
+      await deleteFile(storeName, fullName).catch((error: unknown) => {
+        if (!isNotFound(error)) throw error;
+      });
+    })
+  );
 }
 
 export interface UploadConfig {
@@ -221,9 +300,7 @@ export async function uploadFile(
   config?: UploadConfig
 ): Promise<Operation> {
   const apiKey = getApiKey();
-  const name = storeName.startsWith('fileSearchStores/')
-    ? storeName
-    : `fileSearchStores/${storeName}`;
+  const name = toStoreName(storeName);
 
   const fileContent = fs.readFileSync(filePath);
   const displayName = config?.displayName || path.basename(filePath);
@@ -234,13 +311,20 @@ export async function uploadFile(
 
   // Step 0: Delete existing files with the same originalFileName (overwrite behavior).
   // Callers that already know the target documents (e.g. CLI sync) skip the O(N) scan.
-  const duplicateNames =
-    config?.replaceDocuments ??
-    (await listFiles(storeName))
-      .filter((f) => f.originalDisplayName === displayName)
-      .map((f) => f.name);
-  await Promise.all(duplicateNames.map((docName) => deleteFile(storeName, docName)));
-  invalidateMetadataCache(storeName);
+  if (config?.replaceDocuments) {
+    await deleteReplacedDocuments(storeName, displayName, config.replaceDocuments);
+  } else {
+    const duplicates = (await listFiles(storeName)).filter(
+      (f) => f.originalDisplayName === displayName
+    );
+    await Promise.all(
+      duplicates.map((f) =>
+        deleteFile(storeName, f.name).catch((error: unknown) => {
+          if (!isNotFound(error)) throw error;
+        })
+      )
+    );
+  }
 
   // Step 1: Upload file to Files API first
   const startUploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
@@ -371,26 +455,16 @@ export async function uploadFile(
   return result;
 }
 
-export async function deleteFile(storeName: string, documentName: string): Promise<void> {
-  // documentName can be:
-  // - Full path: "fileSearchStores/{store}/documents/{id}"
-  // - Document ID only: "{id}"
-  let fullPath: string;
-  if (documentName.startsWith('fileSearchStores/')) {
-    fullPath = documentName;
-  } else if (documentName.startsWith('documents/')) {
-    const name = storeName.startsWith('fileSearchStores/')
-      ? storeName
-      : `fileSearchStores/${storeName}`;
-    fullPath = `${name}/${documentName}`;
-  } else {
-    const name = storeName.startsWith('fileSearchStores/')
-      ? storeName
-      : `fileSearchStores/${storeName}`;
-    fullPath = `${name}/documents/${documentName}`;
-  }
+// documentName can be a full path ("fileSearchStores/{store}/documents/{id}"),
+// "documents/{id}", or a bare document ID.
+function toDocumentName(storeName: string, documentName: string): string {
+  if (documentName.startsWith('fileSearchStores/')) return documentName;
+  if (documentName.startsWith('documents/')) return `${toStoreName(storeName)}/${documentName}`;
+  return `${toStoreName(storeName)}/documents/${documentName}`;
+}
 
-  await fetchApi<unknown>(`/${fullPath}?force=true`, {
+export async function deleteFile(storeName: string, documentName: string): Promise<void> {
+  await fetchApi<unknown>(`/${toDocumentName(storeName, documentName)}?force=true`, {
     method: 'DELETE',
   });
   invalidateMetadataCache(storeName);
@@ -448,8 +522,9 @@ export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 // MINIMAL cut File Search TTFT ~40% on 3.6-flash (14.0s -> 8.5s) with no measurable quality
 // loss in blind eval. gemini-3.7/3.8-flash reject MINIMAL (HTTP 400), and 2.x models use
 // thinkingBudget instead, so the default only applies to models verified to accept it.
+// Optional "-preview..." suffix covers preview/dated variants of the same families.
 const MINIMAL_THINKING_MODELS =
-  /^gemini-3\.[56]-flash(-lite)?$|^gemini-3\.1-flash-lite$|^gemini-flash-lite-latest$/;
+  /^(gemini-3\.[56]-flash(-lite)?|gemini-3\.1-flash-lite|gemini-flash-lite-latest)(-preview[\w.-]*)?$/;
 
 function defaultThinkingLevel(model: string): ThinkingLevel | undefined {
   return MINIMAL_THINKING_MODELS.test(model) ? 'MINIMAL' : undefined;
@@ -490,10 +565,13 @@ export async function search(
   query: string,
   config?: SearchConfig
 ): Promise<SearchResult> {
-  const model = config?.model ?? DEFAULT_SEARCH_MODEL;
-  const name = storeName.startsWith('fileSearchStores/')
-    ? storeName
-    : `fileSearchStores/${storeName}`;
+  // Accept both "gemini-x" and "models/gemini-x" ids
+  const model = (config?.model ?? DEFAULT_SEARCH_MODEL).replace(/^models\//, '');
+  const name = toStoreName(storeName);
+
+  // Start (or reuse) the metadata listing now so it runs in parallel with generation.
+  // Rejections are handled inside getCachedFiles; settleWithin below never throws.
+  const metadataPromise = getCachedFiles(storeName);
 
   interface RetrievedContext {
     uri?: string;
@@ -565,26 +643,24 @@ export async function search(
   const text = candidate?.content?.parts?.map((p) => p.text).join('') ?? '';
 
   // Map grounding chunks to sources. Chunks carry the document's customMetadata
-  // (originalFileName, uploadedAt, ...), so the store listing is off the hot path:
-  // - chunks with our metadata: use the cached listing only if already loaded (non-blocking)
-  //   to add documentName/createTime; a cold cache is refreshed in the background.
-  // - chunks without it (uploaded outside GemIndex): wait for the cached listing.
+  // (originalFileName, uploadedAt, ...); documentName/createTime come from the store listing
+  // started before generation, which has usually finished by now:
+  // - chunks without our metadata (uploaded outside GemIndex) wait for the listing.
+  // - otherwise wait at most METADATA_WAIT_BUDGET_MS, then fall back to the last
+  //   (possibly stale) listing so a cold cache never adds O(N) latency.
   const contexts =
     candidate?.groundingMetadata?.groundingChunks
       ?.map((chunk) => chunk.retrievedContext)
       .filter((ctx): ctx is RetrievedContext => !!ctx) ?? [];
 
-  const needsFallback = contexts.some((ctx) => !getOriginalFileName(ctx.customMetadata));
   let cachedFiles: FileSearchStoreFile[] | undefined;
-  if (needsFallback) {
-    try {
-      cachedFiles = await getCachedFiles(storeName);
-    } catch (error) {
-      // Metadata enrichment is best-effort; never fail a search because of it.
-      console.error('Failed to load fallback document metadata:', error);
-    }
-  } else if (contexts.length > 0) {
-    cachedFiles = peekCachedFiles(storeName);
+  if (contexts.length > 0) {
+    const needsFallback = contexts.some((ctx) => !getOriginalFileName(ctx.customMetadata));
+    cachedFiles =
+      (needsFallback
+        ? await metadataPromise.catch(() => undefined)
+        : await settleWithin(metadataPromise, METADATA_WAIT_BUDGET_MS)) ??
+      metadataCache.get(name)?.resolved;
   }
 
   const fallbackByDisplayName = new Map<string, FileSearchStoreFile>();
