@@ -64,7 +64,9 @@ async function uploadWithRetry(
         action.localFile.absolutePath,
         displayName,
         signal,
-        action.localFile.metadata
+        action.localFile.metadata,
+        // The sync plan already resolved the remote document (if any) from a fresh listing
+        (action.replaceRemoteFiles ?? []).map((f) => f.name)
       );
 
       if (result.success) {

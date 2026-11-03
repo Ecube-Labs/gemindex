@@ -23,6 +23,8 @@ export interface SyncAction {
   type: 'upload' | 'skip' | 'delete';
   localFile?: LocalFile;
   remoteFile?: RemoteFile;
+  /** For uploads: every remote document with the same name, replaced by this upload */
+  replaceRemoteFiles?: RemoteFile[];
   reason: string;
 }
 
