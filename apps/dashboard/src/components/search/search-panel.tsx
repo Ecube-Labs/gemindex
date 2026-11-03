@@ -35,7 +35,13 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSearch } from '@/hooks/use-search';
-import { useSearchPresets, AVAILABLE_MODELS } from '@/hooks/use-search-presets';
+import {
+  useSearchPresets,
+  AVAILABLE_MODELS,
+  DEFAULT_MODEL,
+  THINKING_LEVELS,
+} from '@/hooks/use-search-presets';
+import type { ThinkingLevel } from '@/types/api';
 import type { SearchResponse, GroundingSource, GroundingSupport } from '@/types/api';
 
 interface SearchPanelProps {
@@ -278,6 +284,7 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
         topP: settings.topP,
         topK: settings.topK,
         maxOutputTokens: settings.maxOutputTokens,
+        thinkingLevel: settings.thinkingLevel,
       },
       {
         onSuccess: (data) => {
@@ -657,13 +664,15 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
               variant="outline"
               size="sm"
               className="gap-1.5 h-8"
-              aria-label={`Search settings${settings.systemPrompt || settings.model !== 'gemini-2.0-flash' ? ' (customized)' : ''}`}
+              aria-label={`Search settings${settings.systemPrompt || settings.model !== DEFAULT_MODEL || settings.thinkingLevel ? ' (customized)' : ''}`}
               aria-expanded={settingsOpen}
               aria-haspopup="dialog"
             >
               <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="text-xs">Settings</span>
-              {(settings.systemPrompt || settings.model !== 'gemini-2.0-flash') && (
+              {(settings.systemPrompt ||
+                settings.model !== DEFAULT_MODEL ||
+                settings.thinkingLevel) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true" />
               )}
             </Button>
@@ -733,6 +742,38 @@ export function SearchPanel({ storeName }: SearchPanelProps) {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="thinking-select" className="text-xs font-medium">
+                    Thinking level
+                  </Label>
+                  <Select
+                    value={settings.thinkingLevel ?? 'default'}
+                    onValueChange={(value) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        thinkingLevel: value === 'default' ? undefined : (value as ThinkingLevel),
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="thinking-select" className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default" className="text-xs">
+                        Default (MINIMAL where supported)
+                      </SelectItem>
+                      {THINKING_LEVELS.map((level) => (
+                        <SelectItem key={level} value={level} className="text-xs">
+                          {level}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    gemini-3.7/3.8-flash do not support MINIMAL.
+                  </p>
                 </div>
 
                 <fieldset className="grid grid-cols-2 gap-3">

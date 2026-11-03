@@ -6,8 +6,17 @@ const router = new Router({ prefix: '/api' });
 // Search documents
 router.post('/search', async (ctx) => {
   try {
-    const { storeName, query, systemPrompt, model, temperature, topP, topK, maxOutputTokens } = ctx
-      .request.body as {
+    const {
+      storeName,
+      query,
+      systemPrompt,
+      model,
+      temperature,
+      topP,
+      topK,
+      maxOutputTokens,
+      thinkingLevel,
+    } = ctx.request.body as {
       storeName?: string;
       query?: string;
       systemPrompt?: string;
@@ -16,6 +25,7 @@ router.post('/search', async (ctx) => {
       topP?: number;
       topK?: number;
       maxOutputTokens?: number;
+      thinkingLevel?: string;
     };
 
     if (!storeName) {
@@ -30,6 +40,15 @@ router.post('/search', async (ctx) => {
       return;
     }
 
+    if (
+      thinkingLevel !== undefined &&
+      !gemini.THINKING_LEVELS.includes(thinkingLevel as gemini.ThinkingLevel)
+    ) {
+      ctx.status = 400;
+      ctx.body = { message: `thinkingLevel must be one of ${gemini.THINKING_LEVELS.join(', ')}` };
+      return;
+    }
+
     const result = await gemini.search(storeName, query, {
       systemPrompt,
       model,
@@ -37,6 +56,7 @@ router.post('/search', async (ctx) => {
       topP,
       topK,
       maxOutputTokens,
+      thinkingLevel: thinkingLevel as gemini.ThinkingLevel | undefined,
     });
     ctx.body = result;
   } catch (error) {

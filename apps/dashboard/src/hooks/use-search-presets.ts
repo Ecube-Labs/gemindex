@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { SearchPreset } from '@/types/api';
+import type { SearchPreset, ThinkingLevel } from '@/types/api';
 
 const PRESETS_STORAGE_KEY = 'gemindex-search-presets';
 const LAST_SETTINGS_STORAGE_KEY = 'gemindex-last-search-settings';
@@ -11,19 +11,29 @@ export interface SearchSettings {
   topP: number | undefined;
   topK: number | undefined;
   maxOutputTokens: number | undefined;
+  /** undefined = server default (MINIMAL on models that support it) */
+  thinkingLevel: ThinkingLevel | undefined;
 }
+
+export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 const DEFAULT_SETTINGS: SearchSettings = {
   systemPrompt: '',
-  model: 'gemini-3.5-flash',
+  model: DEFAULT_MODEL,
   temperature: undefined,
   topP: undefined,
   topK: undefined,
   maxOutputTokens: undefined,
+  thinkingLevel: undefined,
 };
 
+export const THINKING_LEVELS: ThinkingLevel[] = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'];
+
 export const AVAILABLE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
   'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3.1-pro-preview',
   'gemini-3.1-flash-lite',
 ];
@@ -99,6 +109,7 @@ export function useSearchPresets() {
         topP: settings.topP ?? 0.95,
         topK: settings.topK ?? 40,
         maxOutputTokens: settings.maxOutputTokens ?? 8192,
+        thinkingLevel: settings.thinkingLevel,
       };
       const updatedPresets = [...presets, newPreset];
       setPresets(updatedPresets);
@@ -119,6 +130,7 @@ export function useSearchPresets() {
           topP: preset.topP,
           topK: preset.topK,
           maxOutputTokens: preset.maxOutputTokens,
+          thinkingLevel: preset.thinkingLevel,
         });
       }
     },
@@ -147,6 +159,7 @@ export function useSearchPresets() {
               topP: settings.topP ?? 0.95,
               topK: settings.topK ?? 40,
               maxOutputTokens: settings.maxOutputTokens ?? 8192,
+              thinkingLevel: settings.thinkingLevel,
             }
           : p
       );

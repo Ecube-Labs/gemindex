@@ -92,7 +92,10 @@ export interface SearchRequest {
   topP?: number;
   topK?: number;
   maxOutputTokens?: number;
+  thinkingLevel?: ThinkingLevel;
 }
+
+export type ThinkingLevel = 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface SearchPreset {
   id: string;
@@ -103,6 +106,7 @@ export interface SearchPreset {
   topP: number;
   topK: number;
   maxOutputTokens: number;
+  thinkingLevel?: ThinkingLevel; // undefined = server default (MINIMAL where supported)
 }
 
 export interface GroundingSource {

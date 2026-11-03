@@ -55,6 +55,19 @@ router.post('/:storeName/files', upload.single('file'), async (ctx) => {
       }
     }
 
+    // Document names to overwrite, known by the caller (skips the full-store duplicate scan)
+    const replaceStr = body?.replaceDocuments;
+    if (replaceStr && typeof replaceStr === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(replaceStr);
+        if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'string')) {
+          config = { ...config, replaceDocuments: parsed };
+        }
+      } catch {
+        // Ignore parse errors and fall back to the server-side duplicate scan
+      }
+    }
+
     // Use original filename as display name if not provided
     if (!config?.displayName && file.originalname) {
       config = { ...config, displayName: file.originalname };

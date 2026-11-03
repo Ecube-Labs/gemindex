@@ -27,9 +27,14 @@ export function buildSyncPlan(
 
   // Build map of remote files by originalFileName
   const remoteByName = new Map<string, RemoteFile>();
+  // All remote documents per name (a store may hold duplicates); uploads replace every one
+  const remoteGroups = new Map<string, RemoteFile[]>();
   for (const remote of remoteFiles) {
     if (remote.originalFileName) {
       remoteByName.set(remote.originalFileName, remote);
+      const group = remoteGroups.get(remote.originalFileName) ?? [];
+      group.push(remote);
+      remoteGroups.set(remote.originalFileName, group);
     }
   }
 
@@ -39,6 +44,7 @@ export function buildSyncPlan(
     // Convert local path to filename format for comparison (e.g., "docs/guide.md" → "docs_guide.md")
     const localFileName = pathToFilename(local.relativePath);
     const remote = remoteByName.get(localFileName);
+    const replaceRemoteFiles = remoteGroups.get(localFileName) ?? [];
 
     if (!remote) {
       // File doesn't exist remotely - upload
@@ -46,6 +52,7 @@ export function buildSyncPlan(
         type: 'upload',
         localFile: local,
         reason: 'new file',
+        replaceRemoteFiles,
       });
     } else if (remote.sha256 && localHash && remote.sha256 !== localHash) {
       // File exists but hash differs - upload
@@ -54,6 +61,7 @@ export function buildSyncPlan(
         localFile: local,
         remoteFile: remote,
         reason: 'content changed',
+        replaceRemoteFiles,
       });
     } else if (!remote.sha256) {
       // Remote file has no hash (legacy) - upload to update
@@ -62,6 +70,7 @@ export function buildSyncPlan(
         localFile: local,
         remoteFile: remote,
         reason: 'missing remote hash',
+        replaceRemoteFiles,
       });
     } else {
       // Hashes match - skip

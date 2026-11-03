@@ -123,47 +123,96 @@ function getSha256(customMetadata?: CustomMetadata[]): string | undefined {
   return meta?.stringValue;
 }
 
+// documents.list returns at most 10 per page by default; 20 is the documented maximum.
+const DOCUMENTS_PAGE_SIZE = 20;
+
+function toStoreName(storeName: string): string {
+  return storeName.startsWith('fileSearchStores/') ? storeName : `fileSearchStores/${storeName}`;
+}
+
 // File operations (documents in Gemini API terminology)
+// Throws on failure: callers must not mistake an API error for an empty store.
 export async function listFiles(storeName: string): Promise<FileSearchStoreFile[]> {
-  const name = storeName.startsWith('fileSearchStores/')
-    ? storeName
-    : `fileSearchStores/${storeName}`;
+  const name = toStoreName(storeName);
+  const allDocuments: FileSearchStoreFile[] = [];
+  let pageToken: string | undefined;
 
-  try {
-    const allDocuments: FileSearchStoreFile[] = [];
-    let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ pageSize: String(DOCUMENTS_PAGE_SIZE) });
+    if (pageToken) params.set('pageToken', pageToken);
 
-    do {
-      const endpoint = pageToken
-        ? `/${name}/documents?pageToken=${encodeURIComponent(pageToken)}`
-        : `/${name}/documents`;
+    const data = await fetchApi<{
+      documents?: FileSearchStoreFile[];
+      nextPageToken?: string;
+    }>(`/${name}/documents?${params.toString()}`);
 
-      const data = await fetchApi<{
-        documents?: FileSearchStoreFile[];
-        nextPageToken?: string;
-      }>(endpoint);
+    allDocuments.push(...(data.documents ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
 
-      const documents = data.documents ?? [];
-      allDocuments.push(...documents);
+  // Extract original filename and sha256 from customMetadata
+  return allDocuments.map((doc) => ({
+    ...doc,
+    originalDisplayName: getOriginalFileName(doc.customMetadata),
+    sha256: getSha256(doc.customMetadata),
+  }));
+}
 
-      pageToken = data.nextPageToken;
-    } while (pageToken);
-
-    // Extract original filename and sha256 from customMetadata
-    return allDocuments.map((doc) => ({
-      ...doc,
-      originalDisplayName: getOriginalFileName(doc.customMetadata),
-      sha256: getSha256(doc.customMetadata),
-    }));
-  } catch (error) {
-    console.error('Error listing files:', error);
-    return [];
+// Per-store document metadata cache for search source enrichment (documentName, createTime)
+// that grounding chunks do not carry. Concurrent misses share one in-flight listing.
+const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
+const metadataCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    files: Promise<FileSearchStoreFile[]>;
+    resolved?: FileSearchStoreFile[];
   }
+>();
+
+function getCachedFiles(storeName: string): Promise<FileSearchStoreFile[]> {
+  const key = toStoreName(storeName);
+  const cached = metadataCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.files;
+
+  const files = listFiles(key);
+  const entry: { expiresAt: number; files: typeof files; resolved?: FileSearchStoreFile[] } = {
+    expiresAt: Date.now() + METADATA_CACHE_TTL_MS,
+    files,
+  };
+  metadataCache.set(key, entry);
+  files.then(
+    (resolved) => {
+      entry.resolved = resolved;
+    },
+    () => {
+      if (metadataCache.get(key) === entry) metadataCache.delete(key);
+    }
+  );
+  return files;
+}
+
+// Non-blocking read: returns the cached listing if already loaded, otherwise starts a
+// background refresh and returns undefined so the caller never waits on an O(N) listing.
+function peekCachedFiles(storeName: string): FileSearchStoreFile[] | undefined {
+  getCachedFiles(storeName).catch((error: unknown) => {
+    console.error('Failed to refresh document metadata cache:', error);
+  });
+  return metadataCache.get(toStoreName(storeName))?.resolved;
+}
+
+function invalidateMetadataCache(storeName: string): void {
+  metadataCache.delete(toStoreName(storeName));
 }
 
 export interface UploadConfig {
   displayName?: string;
   customMetadata?: Record<string, string | number>;
+  /**
+   * Document names to replace. When provided (even empty), the caller already knows
+   * which existing documents to overwrite, so the full-store scan is skipped.
+   */
+  replaceDocuments?: string[];
 }
 
 export async function uploadFile(
@@ -183,10 +232,15 @@ export async function uploadFile(
   // Calculate SHA256 hash for sync comparison
   const fileHash = crypto.createHash('sha256').update(fileContent).digest('hex');
 
-  // Step 0: Delete existing files with the same originalFileName (overwrite behavior)
-  const existingFiles = await listFiles(storeName);
-  const duplicates = existingFiles.filter((f) => f.originalDisplayName === displayName);
-  await Promise.all(duplicates.map((f) => deleteFile(storeName, f.name)));
+  // Step 0: Delete existing files with the same originalFileName (overwrite behavior).
+  // Callers that already know the target documents (e.g. CLI sync) skip the O(N) scan.
+  const duplicateNames =
+    config?.replaceDocuments ??
+    (await listFiles(storeName))
+      .filter((f) => f.originalDisplayName === displayName)
+      .map((f) => f.name);
+  await Promise.all(duplicateNames.map((docName) => deleteFile(storeName, docName)));
+  invalidateMetadataCache(storeName);
 
   // Step 1: Upload file to Files API first
   const startUploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
@@ -313,6 +367,7 @@ export async function uploadFile(
     result = { done: true };
   }
 
+  invalidateMetadataCache(storeName);
   return result;
 }
 
@@ -338,6 +393,7 @@ export async function deleteFile(storeName: string, documentName: string): Promi
   await fetchApi<unknown>(`/${fullPath}?force=true`, {
     method: 'DELETE',
   });
+  invalidateMetadataCache(storeName);
 }
 
 // Operation polling
@@ -382,6 +438,21 @@ export interface SearchConfig {
   topP?: number;
   topK?: number;
   maxOutputTokens?: number;
+  /** Gemini 3+ thinking level. Defaults to MINIMAL on models that support it. */
+  thinkingLevel?: ThinkingLevel;
+}
+
+export const THINKING_LEVELS = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+// MINIMAL cut File Search TTFT ~40% on 3.6-flash (14.0s -> 8.5s) with no measurable quality
+// loss in blind eval. gemini-3.7/3.8-flash reject MINIMAL (HTTP 400), and 2.x models use
+// thinkingBudget instead, so the default only applies to models verified to accept it.
+const MINIMAL_THINKING_MODELS =
+  /^gemini-3\.[56]-flash(-lite)?$|^gemini-3\.1-flash-lite$|^gemini-flash-lite-latest$/;
+
+function defaultThinkingLevel(model: string): ThinkingLevel | undefined {
+  return MINIMAL_THINKING_MODELS.test(model) ? 'MINIMAL' : undefined;
 }
 
 export interface GroundingChunk {
@@ -411,54 +482,29 @@ export interface SearchResult {
   supports: GroundingSupport[];
 }
 
+// Quality over speed: flash beat flash-lite in blind eval (9/12 wins) at ~2x the latency
+export const DEFAULT_SEARCH_MODEL = 'gemini-3.6-flash';
+
 export async function search(
   storeName: string,
   query: string,
   config?: SearchConfig
 ): Promise<SearchResult> {
-  const model = config?.model ?? 'gemini-3.5-flash';
+  const model = config?.model ?? DEFAULT_SEARCH_MODEL;
   const name = storeName.startsWith('fileSearchStores/')
     ? storeName
     : `fileSearchStores/${storeName}`;
 
-  // Get file list to map file IDs to full metadata
-  const files = await listFiles(storeName);
-
-  interface FileMetadata {
-    documentName: string;
-    originalDisplayName: string;
-    displayName: string;
-    mimeType?: string;
-    uploadedAt?: string;
-    createTime?: string;
-    sourceUrl?: string;
+  interface RetrievedContext {
+    uri?: string;
+    title?: string;
+    text?: string;
+    fileSearchStore?: string;
+    customMetadata?: CustomMetadata[];
   }
 
-  const fileMetadataMap = new Map<string, FileMetadata>();
-  files.forEach((f) => {
-    if (f.displayName) {
-      const uploadedAtMeta = f.customMetadata?.find((m) => m.key === 'uploadedAt');
-      const sourceUrlMeta = f.customMetadata?.find((m) => m.key === 'sourceUrl');
-      fileMetadataMap.set(f.displayName, {
-        documentName: f.name,
-        originalDisplayName: f.originalDisplayName || f.displayName,
-        displayName: f.displayName,
-        mimeType: f.mimeType,
-        uploadedAt: uploadedAtMeta?.stringValue,
-        createTime: f.createTime,
-        sourceUrl: sourceUrlMeta?.stringValue,
-      });
-    }
-  });
-
   interface GroundingMetadata {
-    groundingChunks?: Array<{
-      retrievedContext?: {
-        title?: string;
-        text?: string;
-        fileSearchStore?: string;
-      };
-    }>;
+    groundingChunks?: Array<{ retrievedContext?: RetrievedContext }>;
     groundingSupports?: Array<{
       segment?: {
         startIndex?: number;
@@ -487,6 +533,8 @@ export async function search(
   if (config?.topK !== undefined) generationConfig.topK = config.topK;
   if (config?.maxOutputTokens !== undefined)
     generationConfig.maxOutputTokens = config.maxOutputTokens;
+  const thinkingLevel = config?.thinkingLevel ?? defaultThinkingLevel(model);
+  if (thinkingLevel) generationConfig.thinkingConfig = { thinkingLevel };
 
   const requestBody: Record<string, unknown> = {
     contents,
@@ -516,26 +564,55 @@ export async function search(
   const candidate = response.candidates?.[0];
   const text = candidate?.content?.parts?.map((p) => p.text).join('') ?? '';
 
-  // Extract grounding chunks as sources with full metadata
-  const sources: GroundingChunk[] =
+  // Map grounding chunks to sources. Chunks carry the document's customMetadata
+  // (originalFileName, uploadedAt, ...), so the store listing is off the hot path:
+  // - chunks with our metadata: use the cached listing only if already loaded (non-blocking)
+  //   to add documentName/createTime; a cold cache is refreshed in the background.
+  // - chunks without it (uploaded outside GemIndex): wait for the cached listing.
+  const contexts =
     candidate?.groundingMetadata?.groundingChunks
       ?.map((chunk) => chunk.retrievedContext)
-      .filter((ctx): ctx is NonNullable<typeof ctx> => !!ctx)
-      .map((ctx) => {
-        const metadata = ctx.title ? fileMetadataMap.get(ctx.title) : undefined;
-        return {
-          // Map file ID to original display name
-          title: metadata?.originalDisplayName || ctx.title || 'Unknown',
-          text: ctx.text ?? '',
-          fileSearchStore: ctx.fileSearchStore ?? '',
-          documentName: metadata?.documentName,
-          displayName: ctx.title,
-          mimeType: metadata?.mimeType,
-          uploadedAt: metadata?.uploadedAt,
-          createTime: metadata?.createTime,
-          sourceUrl: metadata?.sourceUrl,
-        };
-      }) ?? [];
+      .filter((ctx): ctx is RetrievedContext => !!ctx) ?? [];
+
+  const needsFallback = contexts.some((ctx) => !getOriginalFileName(ctx.customMetadata));
+  let cachedFiles: FileSearchStoreFile[] | undefined;
+  if (needsFallback) {
+    try {
+      cachedFiles = await getCachedFiles(storeName);
+    } catch (error) {
+      // Metadata enrichment is best-effort; never fail a search because of it.
+      console.error('Failed to load fallback document metadata:', error);
+    }
+  } else if (contexts.length > 0) {
+    cachedFiles = peekCachedFiles(storeName);
+  }
+
+  const fallbackByDisplayName = new Map<string, FileSearchStoreFile>();
+  for (const f of cachedFiles ?? []) {
+    if (f.displayName) fallbackByDisplayName.set(f.displayName, f);
+  }
+
+  const sources: GroundingChunk[] = contexts.map((ctx) => {
+    const fallback = ctx.title ? fallbackByDisplayName.get(ctx.title) : undefined;
+    const customMetadata = ctx.customMetadata ?? fallback?.customMetadata;
+    const findMeta = (key: string) => customMetadata?.find((m) => m.key === key)?.stringValue;
+    const originalFileName = getOriginalFileName(customMetadata);
+    const documentName = fallback?.name ?? (ctx.uri?.includes('/documents/') ? ctx.uri : undefined);
+
+    return {
+      // Map file ID to original display name
+      title: originalFileName || ctx.title || 'Unknown',
+      text: ctx.text ?? '',
+      fileSearchStore: ctx.fileSearchStore ?? '',
+      documentName,
+      displayName: ctx.title,
+      mimeType:
+        fallback?.mimeType ?? (originalFileName ? getMimeType(originalFileName) : undefined),
+      uploadedAt: findMeta('uploadedAt'),
+      createTime: fallback?.createTime,
+      sourceUrl: findMeta('sourceUrl'),
+    };
+  });
 
   // Extract grounding supports for inline citations
   const supports: GroundingSupport[] =
